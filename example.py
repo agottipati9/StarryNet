@@ -9,7 +9,16 @@ from starrynet.sn_observer import *
 from starrynet.sn_orchestrater import *
 from starrynet.sn_synchronizer import *
 
+import subprocess
+import time
+
 if __name__ == "__main__":
+    # kill all docker containers
+    print("Removing all docker containers...")
+    subprocess.call("docker rm -f $(docker ps -aq)", shell=True, stdout=subprocess.DEVNULL)
+    # wait for 5 seconds
+    time.sleep(5)
+
     # Starlink 5*5: 25 satellite nodes, 2 ground stations.
     # The node index sequence is: 25 sattelites, 2 ground stations.
     # In this example, 25 satellites and 2 ground stations are one AS.
@@ -25,6 +34,11 @@ if __name__ == "__main__":
     sn.create_nodes()
     sn.create_links()
     sn.run_routing_deamon()
+
+    ips = sn.get_IP(26)
+    print("IP: " + str(ips))
+    ips = sn.get_IP(27)
+    print("IP: " + str(ips))
 
     # node_index1 = 1
     # node_index2 = 2

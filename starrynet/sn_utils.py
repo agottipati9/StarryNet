@@ -873,7 +873,7 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
         " tc qdisc add dev B" + str(j) + "-eth" + str(i - 1 + 1) +
         " root netem rate " + str(bw) + "Gbps")
     print('[Add right node:]' + 'docker network connect ' + GSL_name + " " +
-          str(container_id_list[j - 1]) + " --ip 10." + str(address_16_23) +
+          str(container_id_list[j - 1]) + " --ip 9." + str(address_16_23) +
           "." + str(address_8_15) + ".60")
 
 

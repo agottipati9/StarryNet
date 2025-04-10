@@ -95,6 +95,7 @@ class StarryNet():
         self.recovery_time = []
         self.route_src = []
         self.route_time = []
+        self.all_ips = []
 
         # Initiate a working directory
         sn_thread = sn_init_directory_thread(self.file_path,
@@ -179,15 +180,32 @@ class StarryNet():
         ADJ = f.readlines()
         return ADJ[sat_index - 1]
 
+    # def get_IP(self, sat_index):
+    #     docker_container_name = f' sat_container_{sat_index}' if sat_index < self.orbit_number * self.sat_number else f' ground_station_container_{sat_index}'
+    #     IP_info = sn_remote_cmd(
+    #         self.remote_ssh, "docker inspect --format=\"{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\"" + docker_container_name)
+    #     ip_list = []
+    #     print(IP_info)
+    #     for i in range(len(IP_info)):
+    #         ip_list.append(IP_info[i].split(' ')[1])
+    #     return ip_list
+
     def get_IP(self, sat_index):
         docker_container_name = f' sat_container_{sat_index}' if sat_index < self.orbit_number * self.sat_number else f' ground_station_container_{sat_index}'
-        IP_info = sn_remote_cmd(
-            self.remote_ssh, "docker inspect --format=\"{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\"" + docker_container_name)
-        ip_list = []
-        print(IP_info)
-        for i in range(len(IP_info)):
-            ip_list.append(IP_info[i].split(' ')[0])
-        return ip_list
+        # Run ifconfig inside the container
+        cmd = f"docker exec" + docker_container_name + " ifconfig"
+        ifconfig_output = sn_remote_cmd(
+            self.remote_ssh,
+            cmd
+        )        
+        # Find the first IP address
+        for line in ifconfig_output:
+            line = line.strip()
+            if "inet addr:" in line:
+                ip_address = line.split("inet addr:")[1].split()[0]
+                return [ip_address]
+        # Return empty list if no IP found
+        return []
 
     def set_damage(self, damaging_ratio, time_index):
         self.damage_ratio.append(damaging_ratio)
@@ -217,7 +235,7 @@ class StarryNet():
         self.perf_time.append(time_index)
 
     def start_emulation(self):
-        # Start emulation in a new thread.
+        # Start emulation in a new thread.        
         sn_thread = sn_Emulation_Start_Thread(
             self.remote_ssh, self.remote_ftp, self.sat_loss,
             self.sat_ground_bandwidth, self.sat_ground_loss,
