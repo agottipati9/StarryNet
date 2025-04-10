@@ -212,13 +212,14 @@ class sn_init_directory_thread(threading.Thread):
 class sn_Node_Init_Thread(threading.Thread):
 
     def __init__(self, remote_ssh, docker_service_name, node_size,
-                 container_id_list, container_global_idx):
+                 container_id_list, container_global_idx, n_ground_stations):
         threading.Thread.__init__(self)
         self.remote_ssh = remote_ssh
         self.docker_service_name = docker_service_name
         self.node_size = node_size
         self.container_global_idx = container_global_idx
         self.container_id_list = copy.deepcopy(container_id_list)
+        self.n_ground_stations = n_ground_stations
 
     def run(self):
 
@@ -229,7 +230,7 @@ class sn_Node_Init_Thread(threading.Thread):
         self.container_id_list = sn_get_container_info(self.remote_ssh)
         # Rename all containers with the global idx
         sn_rename_all_container(self.remote_ssh, self.container_id_list,
-                                self.container_global_idx)
+                                self.container_global_idx, self.n_ground_stations)
 
 
 def sn_get_container_info(remote_machine_ssh):
@@ -267,13 +268,21 @@ def sn_reset_docker_env(remote_ssh, docker_service_name, node_size):
         " --cap-add ALL lwsen/starlab_node:1.0 ping www.baidu.com")
 
 
-def sn_rename_all_container(remote_ssh, container_id_list, new_idx):
+def sn_rename_all_container(remote_ssh, container_id_list, new_idx, n_ground_stations):
     print("Rename all containers ...")
     new_idx = 1
-    for container_id in container_id_list:
-        sn_remote_cmd(
-            remote_ssh, "docker rename " + str(container_id) +
-            " ovs_container_" + str(new_idx))
+    for i, container_id in enumerate(container_id_list):
+        if i < len(container_id_list) - n_ground_stations:
+            sn_remote_cmd(
+                remote_ssh, "docker rename " + str(container_id) +
+                " sat_container_" + str(new_idx))
+        else:
+            sn_remote_cmd(
+                remote_ssh, "docker rename " + str(container_id) +
+                " ground_station_container_" + str(new_idx))
+        # sn_remote_cmd(
+        #     remote_ssh, "docker rename " + str(container_id) +
+        #     " ovs_container_" + str(new_idx))
         new_idx = new_idx + 1
 
 

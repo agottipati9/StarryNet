@@ -112,7 +112,7 @@ class StarryNet():
         sn_thread = sn_Node_Init_Thread(self.remote_ssh,
                                         self.docker_service_name,
                                         self.node_size, self.container_id_list,
-                                        self.container_global_idx)
+                                        self.container_global_idx, self.fac_num) # fac_num is the number of ground stations
         sn_thread.start()
         sn_thread.join()
         self.container_id_list = sn_get_container_info(self.remote_ssh)
@@ -180,10 +180,11 @@ class StarryNet():
         return ADJ[sat_index - 1]
 
     def get_IP(self, sat_index):
+        docker_container_name = ' sat_container_' if sat_index < self.orbit_number * self.sat_number else ' ground_station_container_'
         IP_info = sn_remote_cmd(
             self.remote_ssh, "docker inspect" +
             " --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}\n{{end}}'"
-            + " ovs_container_" + str(sat_index))
+            + docker_container_name + str(sat_index))
         ip_list = []
         for i in range(len(IP_info) - 2):
             ip_list.append(IP_info[i].split()[0])
