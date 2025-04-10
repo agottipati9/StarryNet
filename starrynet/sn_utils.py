@@ -813,7 +813,7 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
         remote_ssh, "docker exec -it " + str(container_id_list[i - 1]) +
         " ip addr | grep -B 2 9." + str(address_16_23) + "." +
         str(address_8_15) +
-        ".50 | head -n 1 | awk -F: '{ print $2 }' | tr -d [:blank:]")
+        ".50 | head -n 1 | awk -F: '{ print $2 }' | tr -d '[:blank:]'")
     target_interface = str(ifconfig_output[0]).split("@")[0]
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
@@ -838,7 +838,7 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
         " tc qdisc add dev B" + str(i - 1 + 1) + "-eth" + str(j) +
         " root netem rate " + str(bw) + "Gbps")
     print('[Add current node:]' + 'docker network connect ' + GSL_name + " " +
-          str(container_id_list[i - 1]) + " --ip 10." + str(address_16_23) +
+          str(container_id_list[i - 1]) + " --ip 9." + str(address_16_23) +
           "." + str(address_8_15) + ".50")
     sn_remote_cmd(
         remote_ssh, 'docker network connect ' + GSL_name + " " +
@@ -848,7 +848,7 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
         remote_ssh, "docker exec -it " + str(container_id_list[j - 1]) +
         " ip addr | grep -B 2 9." + str(address_16_23) + "." +
         str(address_8_15) +
-        ".60 | head -n 1 | awk -F: '{ print $2 }' | tr -d [:blank:]")
+        ".60 | head -n 1 | awk -F: '{ print $2 }' | tr -d '[:blank:]'")
     target_interface = str(ifconfig_output[0]).split("@")[0]
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
