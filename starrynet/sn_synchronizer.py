@@ -180,14 +180,13 @@ class StarryNet():
         return ADJ[sat_index - 1]
 
     def get_IP(self, sat_index):
-        docker_container_name = ' sat_container_' if sat_index < self.orbit_number * self.sat_number else ' ground_station_container_'
+        docker_container_name = f' sat_container_{sat_index}' if sat_index < self.orbit_number * self.sat_number else f' ground_station_container_{sat_index}'
         IP_info = sn_remote_cmd(
-            self.remote_ssh, "docker inspect" +
-            " --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}\n{{end}}'"
-            + docker_container_name + str(sat_index))
+            self.remote_ssh, "docker inspect --format=\"{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\"" + docker_container_name)
         ip_list = []
-        for i in range(len(IP_info) - 2):
-            ip_list.append(IP_info[i].split()[0])
+        print(IP_info)
+        for i in range(len(IP_info)):
+            ip_list.append(IP_info[i].split(' ')[0])
         return ip_list
 
     def set_damage(self, damaging_ratio, time_index):
