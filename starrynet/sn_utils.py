@@ -250,34 +250,30 @@ class sn_RTC_Node_Init_Thread(threading.Thread):
         # Get container list in each machine.
         self.container_id_list = sn_get_container_info(self.remote_ssh)
         # get two names of form "ground_stattion_container_"
-        ground_stations = [name for name in self.container_id_list if "ground_station_container_" in name][:2]
-        sender_cmd = """docker run -it \
-				    --cap-add NET_ADMIN \
-				    --name sender_rtc \
-				    --network GS_26 \
-				-v /opt/home_dir/outputs:/opt/home_dir/outputs \
-				-v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
-				-v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
-                rtc:latest ping www.google.com"""  # TODO: network needs to be generic regardless of topology
-        receiver_cmd = """docker run -it \
-				    --cap-add NET_ADMIN \
-				    --name receiver_rtc \
-				    --network GS_27 \
-				-v /opt/home_dir/outputs:/opt/home_dir/outputs \
-				-v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
-				-v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
-    rtc:latest ping www.google.com"""  # TODO: network needs to be generic regardless of topology
+        ground_stations = [name for name in self.container_id_list if "ground_station_container_" in name][:2]        
+        rtc_cmd = """
+        docker run -d \
+            --cap-add NET_ADMIN \
+            --name sender_rtc \
+            --network GS_26 \
+            -v /opt/home_dir/outputs:/opt/home_dir/outputs \
+            -v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
+            -v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
+            rtc:latest tail -f /dev/null && \
+        docker run -d \
+            --cap-add NET_ADMIN \
+            --name receiver_rtc \
+            --network GS_27 \
+            -v /opt/home_dir/outputs:/opt/home_dir/outputs \
+            -v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
+            -v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
+            rtc:latest tail -f /dev/null && \
+        sleep 2 && \
+        docker exec -d sender_rtc ip route add 9.27.27.0/24 via 9.26.26.10 dev eth0 && \
+        docker exec -d receiver_rtc ip route add 9.26.26.0/24 via 9.27.27.10 dev eth0
+        """ # TODO: network needs to be generic regardless of topology
         # create sender and receiver containers
-        sn_remote_cmd(self.remote_ssh, sender_cmd)
-        sn_remote_cmd(self.remote_ssh, receiver_cmd)
-        # add ip route to sender and receiver containers manually
-        sender_cmd = "ip route add 9.27.27.0/24 via 9.26.26.10 dev eth0"  # TODO: ip needs to be generic regardless of topology
-        receiver_cmd = "ip route add 9.26.26.0/24 via 9.27.27.10 dev eth0"  # TODO: ip needs to be generic regardless of topology
-        sn_remote_cmd(self.remote_ssh, "docker exec -d sender_rtc " + sender_cmd)
-        sn_remote_cmd(self.remote_ssh, "docker exec -d receiver_rtc " + receiver_cmd)
-
-
-
+        sn_remote_cmd(self.remote_ssh, rtc_cmd)
 
 def sn_get_container_info(remote_machine_ssh):
     #  Read all container information in all_container_info
@@ -414,7 +410,7 @@ class sn_Emulation_Start_Thread(threading.Thread):
                  ping_src, ping_des, ping_time, sr_src, sr_des, sr_target,
                  sr_time, damage_ratio, damage_time, damage_list,
                  recovery_time, route_src, route_time, duration,
-                 utility_checking_time, perf_src, perf_des, perf_time):
+                 utility_checking_time, perf_src, perf_des, perf_time, video_call_src, video_call_des, video_call_time):
         threading.Thread.__init__(self)
         self.remote_ssh = remote_ssh
         self.remote_ftp = remote_ftp
@@ -432,6 +428,10 @@ class sn_Emulation_Start_Thread(threading.Thread):
         self.perf_src = perf_src
         self.perf_des = perf_des
         self.perf_time = perf_time
+        # video call
+        self.video_call_src = video_call_src
+        self.video_call_des = video_call_des
+        self.video_call_time = video_call_time
         self.sr_src = sr_src
         self.sr_des = sr_des
         self.sr_target = sr_target
@@ -543,6 +543,21 @@ class sn_Emulation_Start_Thread(threading.Thread):
                                      self.file_path,
                                      self.configuration_file_path,
                                      self.container_id_list, self.remote_ssh)
+                    # start videoconferencing call at scheduled time  
+                    if timeptr in self.video_call_time:
+                        index = [
+                            i for i, val in enumerate(self.video_call_time)
+                            if val == timeptr
+                        ]
+                        for index_num in index:
+                            sn_video_call(self.video_call_src[index_num],
+                                          self.video_call_des[index_num],
+                                          self.video_call_time[index_num],
+                                          self.constellation_size,
+                                          self.container_id_list,
+                                          self.file_path,
+                                          self.configuration_file_path,
+                                          self.remote_ssh)
                     timeptr += 1
                     end_time = time.time()
                     passed_time = (
@@ -821,6 +836,16 @@ def sn_perf(src, des, time_index, constellation_size, container_id_list,
         str(des) + "_" + str(time_index) + ".txt", "w")
     f.writelines(perf_result)
     f.close()
+
+
+def sn_video_call(src, des, time_index, constellation_size, container_id_list,
+                  file_path, configuration_file_path, remote_ssh):
+    cmd = """
+    docker exec -d receiver_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/receiver_gcc.json && \
+    docker exec -d sender_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/sender_gcc_local.json
+    """
+    sn_remote_cmd(remote_ssh, cmd)
+    print("Started video call")
 
 
 def sn_route(src, time_index, file_path, configuration_file_path,

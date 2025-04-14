@@ -12,103 +12,109 @@ from starrynet.sn_synchronizer import *
 import subprocess
 import time
 
-if __name__ == "__main__":
-    # kill all docker containers
-    print("Removing all docker containers...")
-    subprocess.call("docker rm -f $(docker ps -aq)", shell=True, stdout=subprocess.DEVNULL)
-    # wait for 5 seconds
-    time.sleep(5)
+# kill all docker containers
+# print("Removing all docker containers...")
+# subprocess.call("docker rm -f $(docker ps -aq)", shell=True, stdout=subprocess.DEVNULL)
+# wait for 5 seconds
+# time.sleep(5)
 
-    # Starlink 5*5: 25 satellite nodes, 2 ground stations.
-    # The node index sequence is: 25 sattelites, 2 ground stations.
-    # In this example, 25 satellites and 2 ground stations are one AS.
+# Starlink 5*5: 25 satellite nodes, 2 ground stations.
+# The node index sequence is: 25 sattelites, 2 ground stations.
+# In this example, 25 satellites and 2 ground stations are one AS.
 
-    AS = [[1, 27]]  # Node #1 to Node #27 are within the same AS.
-    GS_lat_long = [[50.110924, 8.682127], [46.635700, 14.311817]
-                   ]  # latitude and longitude of frankfurt and  Austria
-    configuration_file_path = "./config.json"
-    hello_interval = 10  # hello_interval(s) in OSPF. 1-200 are supported.
+AS = [[1, 27]]  # Node #1 to Node #27 are within the same AS.
+GS_lat_long = [[50.110924, 8.682127], [46.635700, 14.311817]
+                ]  # latitude and longitude of frankfurt and  Austria
+configuration_file_path = "./config.json"
+hello_interval = 10  # hello_interval(s) in OSPF. 1-200 are supported.
 
-    print('Start StarryNet.')
-    sn = StarryNet(configuration_file_path, GS_lat_long, hello_interval, AS)
-    sn.create_nodes()
-    sn.create_links()
-    sn.run_routing_deamon()
-    sn.create_rtc_nodes()
+print('Start StarryNet.')
+sn = StarryNet(configuration_file_path, GS_lat_long, hello_interval, AS)
+sn.create_nodes()
+sn.create_links()
+sn.run_routing_deamon()
 
-    ips = sn.get_IP(26)
-    print("IP: " + str(ips))
-    ips = sn.get_IP(27)
-    print("IP: " + str(ips))
+print('Creating RTC nodes.')
+sn.create_rtc_nodes()
 
-    # node_index1 = 1
-    # node_index2 = 2
-    # time_index = 2
+ips = sn.get_IP(26)
+print("IP: " + str(ips))
+ips = sn.get_IP(27)
+print("IP: " + str(ips))
 
-    # # distance between nodes at a certain time
-    # node_distance = sn.get_distance(node_index1, node_index2, time_index)
-    # print("node_distance (km): " + str(node_distance))
+# node_index1 = 1
+# node_index2 = 2
+# time_index = 2
 
-    # # neighbor node indexes of node at a certain time
-    # neighbors_index = sn.get_neighbors(node_index1, time_index)
-    # print("neighbors_index: " + str(neighbors_index))
+# # distance between nodes at a certain time
+# node_distance = sn.get_distance(node_index1, node_index2, time_index)
+# print("node_distance (km): " + str(node_distance))
 
-    # # GS connected to the node at a certain time
-    # node_index1 = 7
-    # GSes = sn.get_GSes(node_index1, time_index)
-    # print("GSes are: " + str(GSes))
+# # neighbor node indexes of node at a certain time
+# neighbors_index = sn.get_neighbors(node_index1, time_index)
+# print("neighbors_index: " + str(neighbors_index))
 
-    # # LLA of a node at a certain time
-    # LLA = sn.get_position(node_index1, time_index)
-    # print("LLA: " + str(LLA))
+# # GS connected to the node at a certain time
+# node_index1 = 7
+# GSes = sn.get_GSes(node_index1, time_index)
+# print("GSes are: " + str(GSes))
 
-    # sn.get_utility(time_index)  # CPU and memory useage
+# # LLA of a node at a certain time
+# LLA = sn.get_position(node_index1, time_index)
+# print("LLA: " + str(LLA))
 
-    # IPList of a node
-    # gs_1 = 26
-    # gs_2 = 27
-    # IP_list = sn.get_IP(gs_1)
-    # print("IP: " + str(IP_list))
+# sn.get_utility(time_index)  # CPU and memory useage
 
-    # ratio = 0.3
-    # time_index = 5
-    # # random damage of a given ratio at a certain time
-    # sn.set_damage(ratio, time_index)
+# IPList of a node
+# gs_1 = 26
+# gs_2 = 27
+# IP_list = sn.get_IP(gs_1)
+# print("IP: " + str(IP_list))
 
-    # time_index = 10
-    # sn.set_recovery(time_index)  # recover the damages at a certain time
+# ratio = 0.3
+# time_index = 5
+# # random damage of a given ratio at a certain time
+# sn.set_damage(ratio, time_index)
 
-    # node_index1 = 27
-    # time_index = 15
-    # # routing table of a node at a certain time. The output file will be written at the working directory.
-    # sn.check_routing_table(node_index1, time_index)
+# time_index = 10
+# sn.set_recovery(time_index)  # recover the damages at a certain time
 
-    # sat = 1
-    # des = 27
-    # next_hop_sat = 2
-    # time_index = 20
-    # # set the next hop at a certain time. Sat, Des and NextHopSat are indexes and Sat and NextHopSat are neighbors.
-    # sn.set_next_hop(sat, des, next_hop_sat, time_index)
+# node_index1 = 27
+# time_index = 15
+# # routing table of a node at a certain time. The output file will be written at the working directory.
+# sn.check_routing_table(node_index1, time_index)
 
-    # node_index1 = 26
-    # node_index2 = 27
-    # time_index = 3
-    # # ping msg of two nodes at a certain time. The output file will be written at the working directory.
-    # sn.set_ping(node_index1, node_index2, time_index)
-    # for i in range(35, 80):
-    #     node_index1 = 26
-    #     node_index2 = 27
-    #     time_index = i
-    #     # ping msg of two nodes at a certain time. The output file will be written at the working directory.
-    #     sn.set_ping(node_index1, node_index2, time_index)
+# sat = 1
+# des = 27
+# next_hop_sat = 2
+# time_index = 20
+# # set the next hop at a certain time. Sat, Des and NextHopSat are indexes and Sat and NextHopSat are neighbors.
+# sn.set_next_hop(sat, des, next_hop_sat, time_index)
 
-    node_index1 = 26
-    node_index2 = 27
-    time_index = 5
-    # perf msg of two nodes at a certain time. The output file will be written at the working directory.
-    sn.set_perf(node_index1, node_index2, time_index)
-    sn.set_perf(node_index1, node_index2, 15)
-    sn.set_perf(node_index2, node_index1, 30)
+# node_index1 = 26
+# node_index2 = 27
+# time_index = 3
+# # ping msg of two nodes at a certain time. The output file will be written at the working directory.
+# sn.set_ping(node_index1, node_index2, time_index)
+# for i in range(35, 80):
+#     node_index1 = 26
+#     node_index2 = 27
+#     time_index = i
+#     # ping msg of two nodes at a certain time. The output file will be written at the working directory.
+#     sn.set_ping(node_index1, node_index2, time_index)
 
-    sn.start_emulation()
-    sn.stop_emulation()
+# node_index1 = 26
+# node_index2 = 27
+# time_index = 5
+# # perf msg of two nodes at a certain time. The output file will be written at the working directory.
+# sn.set_perf(node_index1, node_index2, time_index)
+# sn.set_perf(node_index1, node_index2, 15)
+# sn.set_perf(node_index2, node_index1, 30)
+
+sn.set_video_call(26, 27, 5)  # video call between node_index1 and node_index2 at time_index
+
+sn.start_emulation()
+sn.stop_emulation()
+
+# TODO: clean output directory, logging, plotting, etc
+
