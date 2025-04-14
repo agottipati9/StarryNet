@@ -233,6 +233,52 @@ class sn_Node_Init_Thread(threading.Thread):
                                 self.container_global_idx, self.n_ground_stations)
 
 
+# A thread designed for initialized RTC containers
+class sn_RTC_Node_Init_Thread(threading.Thread):
+
+    def __init__(self, remote_ssh, docker_service_name, node_size,
+                 container_id_list, container_global_idx, n_ground_stations):
+        threading.Thread.__init__(self)
+        self.remote_ssh = remote_ssh
+        self.docker_service_name = docker_service_name
+        self.node_size = node_size
+        self.container_global_idx = container_global_idx
+        self.container_id_list = copy.deepcopy(container_id_list)
+        self.n_ground_stations = n_ground_stations
+
+    def run(self):
+        # Get container list in each machine.
+        self.container_id_list = sn_get_container_info(self.remote_ssh)
+        # get two names of form "ground_stattion_container_"
+        ground_stations = [name for name in self.container_id_list if "ground_station_container_" in name][:2]
+        sender_cmd = """docker run -it \
+				    --cap-add NET_ADMIN \
+				    --name sender_rtc \
+				    --network GS_26 \
+				-v /opt/home_dir/outputs:/opt/home_dir/outputs \
+				-v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
+				-v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
+                rtc:latest ping www.google.com"""  # TODO: network needs to be generic regardless of topology
+        receiver_cmd = """docker run -it \
+				    --cap-add NET_ADMIN \
+				    --name receiver_rtc \
+				    --network GS_27 \
+				-v /opt/home_dir/outputs:/opt/home_dir/outputs \
+				-v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
+				-v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
+    rtc:latest ping www.google.com"""  # TODO: network needs to be generic regardless of topology
+        # create sender and receiver containers
+        sn_remote_cmd(self.remote_ssh, sender_cmd)
+        sn_remote_cmd(self.remote_ssh, receiver_cmd)
+        # add ip route to sender and receiver containers manually
+        sender_cmd = "ip route add 9.27.27.0/24 via 9.26.26.10 dev eth0"  # TODO: ip needs to be generic regardless of topology
+        receiver_cmd = "ip route add 9.26.26.0/24 via 9.27.27.10 dev eth0"  # TODO: ip needs to be generic regardless of topology
+        sn_remote_cmd(self.remote_ssh, "docker exec -d sender_rtc " + sender_cmd)
+        sn_remote_cmd(self.remote_ssh, "docker exec -d receiver_rtc " + receiver_cmd)
+
+
+
+
 def sn_get_container_info(remote_machine_ssh):
     #  Read all container information in all_container_info
     all_container_info = sn_remote_cmd(remote_machine_ssh, "docker ps")

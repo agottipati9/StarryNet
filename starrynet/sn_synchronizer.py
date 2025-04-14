@@ -141,6 +141,19 @@ class StarryNet():
         routing_thread.join()
         print("Bird routing in all containers are running.")
 
+    def create_rtc_nodes(self):
+        # Initializes each rtc node in multiple threads.
+        sn_thread = sn_RTC_Node_Init_Thread(self.remote_ssh,
+                                        self.docker_service_name,
+                                        self.node_size, self.container_id_list,
+                                        self.container_global_idx, self.fac_num) # fac_num is the number of ground stations
+        sn_thread.start()
+        sn_thread.join()
+        container_id_list = sn_get_container_info(self.remote_ssh)
+        rtc_nodes = [name for name in container_id_list if 'rtc' in name]
+        print("RTC nodes initialization done. " +
+              str(len(rtc_nodes)) + " have been created.")
+
     def get_distance(self, sat1_index, sat2_index, time_index):
         delaypath = self.configuration_file_path + "/" + self.file_path + '/delay/' + str(
             time_index) + '.txt'

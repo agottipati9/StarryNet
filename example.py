@@ -34,6 +34,7 @@ if __name__ == "__main__":
     sn.create_nodes()
     sn.create_links()
     sn.run_routing_deamon()
+    sn.create_rtc_nodes()
 
     ips = sn.get_IP(26)
     print("IP: " + str(ips))
