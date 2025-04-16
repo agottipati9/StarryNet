@@ -30,6 +30,7 @@ hello_interval = 10  # hello_interval(s) in OSPF. 1-200 are supported.
 
 print('Start StarryNet.')
 sn = StarryNet(configuration_file_path, GS_lat_long, hello_interval, AS)
+sn.stop_emulation() # stop emulation before creating nodes
 sn.create_nodes()
 sn.create_links()
 sn.run_routing_deamon()
@@ -37,10 +38,10 @@ sn.run_routing_deamon()
 print('Creating RTC nodes.')
 sn.create_rtc_nodes()
 
-ips = sn.get_IP(26)
-print("IP: " + str(ips))
-ips = sn.get_IP(27)
-print("IP: " + str(ips))
+# ips = sn.get_IP(26)
+# print("IP: " + str(ips))
+# ips = sn.get_IP(27)
+# print("IP: " + str(ips))
 
 # node_index1 = 1
 # node_index2 = 2
@@ -111,7 +112,7 @@ print("IP: " + str(ips))
 # sn.set_perf(node_index1, node_index2, 15)
 # sn.set_perf(node_index2, node_index1, 30)
 
-sn.set_video_call(26, 27, 5)  # video call between node_index1 and node_index2 at time_index
+sn.set_video_call(26, 27, 5)  # start video call. NOTE: these indices are not used as sender and receiver are already set.
 
 sn.start_emulation()
 sn.stop_emulation()

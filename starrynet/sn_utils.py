@@ -246,16 +246,24 @@ class sn_RTC_Node_Init_Thread(threading.Thread):
         self.container_id_list = copy.deepcopy(container_id_list)
         self.n_ground_stations = n_ground_stations
 
-    def run(self):
-        # Get container list in each machine.
-        self.container_id_list = sn_get_container_info(self.remote_ssh)
-        # get two names of form "ground_stattion_container_"
-        ground_stations = [name for name in self.container_id_list if "ground_station_container_" in name][:2]        
-        rtc_cmd = """
+    def run(self):    
+        # Get network names for each ground station
+        networks = sn_remote_cmd(self.remote_ssh, "docker network ls")
+        gs_networks = [line.split()[1] for line in networks if "GS_" in line][:2]
+
+        # Get subnet and gateway for each network
+        gs1_subnet = sn_remote_cmd(self.remote_ssh, f"docker network inspect {gs_networks[0]} -f '{{{{.IPAM.Config}}}}' | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/[0-9]\\+'")[0].strip()
+        gs2_subnet = sn_remote_cmd(self.remote_ssh, f"docker network inspect {gs_networks[1]} -f '{{{{.IPAM.Config}}}}' | grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/[0-9]\\+'")[0].strip()
+
+        gs1_gw = sn_remote_cmd(self.remote_ssh, f"docker network inspect {gs_networks[0]} -f '{{{{range .Containers}}}}{{{{.IPv4Address}}}} {{{{end}}}}' | cut -d'/' -f1")[0].strip()
+        gs2_gw = sn_remote_cmd(self.remote_ssh, f"docker network inspect {gs_networks[1]} -f '{{{{range .Containers}}}}{{{{.IPv4Address}}}} {{{{end}}}}' | cut -d'/' -f1")[0].strip()
+
+        # Create RTC containers connected to respective networks
+        rtc_cmd = f"""
         docker run -d \
             --cap-add NET_ADMIN \
             --name sender_rtc \
-            --network GS_26 \
+            --network {gs_networks[0]} \
             -v /opt/home_dir/outputs:/opt/home_dir/outputs \
             -v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
             -v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
@@ -263,16 +271,33 @@ class sn_RTC_Node_Init_Thread(threading.Thread):
         docker run -d \
             --cap-add NET_ADMIN \
             --name receiver_rtc \
-            --network GS_27 \
+            --network {gs_networks[1]} \
             -v /opt/home_dir/outputs:/opt/home_dir/outputs \
             -v /opt/home_dir/sample_media:/opt/home_dir/sample_media \
             -v /opt/home_dir/AlphaRTC:/opt/home_dir/AlphaRTC \
             rtc:latest tail -f /dev/null && \
         sleep 2 && \
-        docker exec -d sender_rtc ip route add 9.27.27.0/24 via 9.26.26.10 dev eth0 && \
-        docker exec -d receiver_rtc ip route add 9.26.26.0/24 via 9.27.27.10 dev eth0
-        """ # TODO: network needs to be generic regardless of topology
-        # create sender and receiver containers
+        docker exec -d sender_rtc ip route add {gs2_subnet} via {gs1_gw} dev eth0 && \
+        docker exec -d receiver_rtc ip route add {gs1_subnet} via {gs2_gw} dev eth0
+        """
+        
+        # modify rtc_caller_configs
+        receiver_rtc_ip_arr = gs2_subnet.split('.')
+        receiver_rtc_ip_arr[-1] = '2'
+        receiver_rtc_ip = '.'.join(receiver_rtc_ip_arr)
+        config_path = "/opt/home_dir/AlphaRTC/configs/sender.json"
+        try:
+            with open(config_path, 'r') as file:
+                config = json.load(file)
+            # Update the dest_ip field
+            config['serverless_connection']['sender']['dest_ip'] = receiver_rtc_ip
+            # Write the updated JSON back to the file
+            with open(config_path, 'w') as file:
+                json.dump(config, file, indent=4)
+            print(f"Successfully updated dest_ip to {receiver_rtc_ip} in {config_path}")
+        except Exception as e:
+            print(f"Error updating dest_ip in {config_path}: {e}")
+        # Create containers and set up routing
         sn_remote_cmd(self.remote_ssh, rtc_cmd)
 
 def sn_get_container_info(remote_machine_ssh):
@@ -841,8 +866,8 @@ def sn_perf(src, des, time_index, constellation_size, container_id_list,
 def sn_video_call(src, des, time_index, constellation_size, container_id_list,
                   file_path, configuration_file_path, remote_ssh):
     cmd = """
-    docker exec -d receiver_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/receiver_gcc.json && \
-    docker exec -d sender_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/sender_gcc_local.json
+    docker exec -d receiver_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/receiver.json && \
+    docker exec -d sender_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/sender.json
     """
     sn_remote_cmd(remote_ssh, cmd)
     print("Started video call")
