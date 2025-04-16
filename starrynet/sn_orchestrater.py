@@ -382,10 +382,9 @@ def sn_establish_GSL(container_id_list, matrix, GS_num, constellation_size, bw,
 
 
 def sn_copy_run_conf(container_idx, Path, current, total):
-    os.system("docker cp " + Path + "/B" + str(current + 1) + ".conf " +
-              str(container_idx) + ":/B" + str(current + 1) + ".conf")
+    subprocess.run(["docker", "cp", f"{Path}/B{current + 1}.conf", f"{container_idx}:/B{current + 1}.conf"])
     print("[" + str(current + 1) + "/" + str(total) + "]" +
-          " docker cp bird.conf " + str(container_idx) + ":/bird.conf")
+        " docker cp bird.conf " + str(container_idx) + ":/bird.conf")
     result = subprocess.run(["docker", "exec", str(container_idx), "bird", "-c", "B"+str(current+1)+".conf"],
                             capture_output=True, text=True)
     with open("/tmp/bird.log", "a") as f:
