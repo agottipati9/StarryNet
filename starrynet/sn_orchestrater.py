@@ -471,22 +471,52 @@ def sn_del_network(network_name):
 
 
 def sn_stop_emulation():
-    os.system("docker service rm constellation-test")
-    with os.popen("docker rm -f $(docker ps -a -q)") as f:
-        f.readlines()
-    with os.popen("docker network ls") as f:
-        all_br_info = f.readlines()
-        del_threads = []
-        for line in all_br_info:
-            if "La" in line or "Le" or "GS" in line:
+    timeout = 10
+    try:
+        # Force kill all containers first to prevent locks
+        subprocess.run("docker kill $(docker ps -q)", 
+                      shell=True, 
+                      timeout=timeout,
+                      stderr=subprocess.DEVNULL)
+    except:
+        print('No containers running') # Ignore if no containers running
+    try:
+        # Then remove the service
+        subprocess.run("docker service rm constellation-test", 
+                      shell=True,
+                      timeout=timeout)
+    except:
+        print('No service running') # Ignore if no service running
+    try:
+        # Force remove any remaining containers
+        subprocess.run("docker rm -f $(docker ps -a -q)",
+                      shell=True, 
+                      timeout=timeout)
+    except:
+        print('No containers running') # Ignore if no containers running
+    try:
+        # Get network list
+        result = subprocess.run("docker network ls",
+                              shell=True,
+                              capture_output=True,
+                              text=True,
+                              timeout=timeout)
+        networks_to_remove = []
+        for line in result.stdout.splitlines():
+            if any(x in line for x in ["La", "Le", "GS"]):
                 network_name = line.split()[1]
-                del_thread = threading.Thread(target=sn_del_network,
-                                              args=(network_name, ))
-                del_threads.append(del_thread)
-        for del_thread in del_threads:
-            del_thread.start()
-        for del_thread in del_threads:
-            del_thread.join()
+                networks_to_remove.append(network_name)
+        # Remove networks sequentially instead of parallel
+        # to avoid potential race conditions
+        for network in networks_to_remove:
+            try:
+                subprocess.run(f"docker network rm {network} --force",
+                             shell=True,
+                             timeout=timeout)
+            except:
+                print(f"Warning: Could not remove network {network}")
+    except Exception as e:
+        print(f"Warning: Error during network cleanup: {e}")
 
 
 def sn_recover(damage_list, container_id_list, sat_loss):
