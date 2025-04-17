@@ -37,8 +37,8 @@ BASE_CONFIG = {
   "antenna number": 1,
   "antenna_inclination_angle": 25, # Default elevation angle
   "remote_machine_IP": "127.0.0.1", # Placeholder
-  "remote_machine_username": "user", # Placeholder
-  "remote_machine_password": "paswd", # Placeholder
+  "remote_machine_username": "agot", # REPLACE ME
+  "remote_machine_password": "1234", # REPLACE ME
   "Satellite link": "grid",
   "IP version": "IPv4",
   "Intra-AS routing": "OSPF",
@@ -85,6 +85,12 @@ def generate_config(scenario_id):
 
     print(f"Generating config for Scenario {scenario_id}: {scenario_name}")
 
+    # TODO: we should probably adjust call runtime based on scenario due to load on node
+    #  we need to test each scenario to ensure calls finish before emulation ends
+    # 50 containers ~ ???
+    # 80 containers ~ ???
+    # 100 containers ~ 5 minutes
+    # 150 containers ~ ???
     # --- Control Cases ---
     if scenario_id == 1: # Stable LEO (Best-Case Control)
         config["Altitude (km)"] = 1200 # Higher altitude reduces GSL churn
@@ -191,8 +197,45 @@ def run_experiment(args):
 
     # put all nodes in the same AS
     AS = [[1, n_nodes]]
-    GS_lat_long = [[50.110924, 8.682127], [46.635700, 14.311817]
-                    ]  # latitude and longitude of frankfurt and  Austria
+    ground_station_locations = [
+        # North America
+        [33.92, -118.35],  # Hawthorne, CA, USA (Starlink HQ/Gateway)
+        [47.67, -122.12],  # Redmond, WA, USA (Starlink Gateway)
+        [48.17, -111.94],  # Conrad, MT, USA (Starlink Gateway)
+        [44.44, -90.84],   # Merrillan, WI, USA (Starlink Gateway)
+        [25.99, -97.15],   # Boca Chica, TX, USA (Starlink Gateway/Starbase)
+        [47.56, -52.71],   # St. John's, NL, Canada (Starlink Gateway)
+
+        # Europe
+        [50.98, 2.12],     # Gravelines, France (Starlink Gateway)
+        [50.33, 8.53],     # Usingen, Germany (Near Frankfurt, Starlink Gateway)
+        [50.05, -5.18],    # Goonhilly Downs, UK (Starlink/Multi-Operator Gateway)
+        [40.41, -3.70],    # Madrid, Spain (Reported Starlink Gateway Area)
+        [38.33, 23.56],    # Tanagra, Greece (OneWeb Gateway)
+        [78.22, 15.65],    # Svalbard, Norway (OneWeb/KSAT Gateway)
+        [50.110924, 8.682127], # Frankfurt, Germany (Starlink Gateway)
+        [46.635700, 14.311817], # Austria (Starlink Gateway)
+
+        # Oceania
+        [-36.40, 174.66],  # Warkworth, New Zealand (Starlink Gateway)
+        [-32.95, 151.65],  # Boolaroo, NSW, Australia (Starlink Gateway)
+
+        # South America
+        [-33.45, -70.67],  # Santiago, Chile (Starlink/AWS Gateway)
+        [-23.55, -46.63],  # São Paulo, Brazil (AWS Gateway)
+
+        # Asia
+        [26.07, 50.55],    # Bahrain (AWS Gateway)
+        [1.35, 103.82],   # Singapore (AWS Gateway)
+
+        # Africa
+        [-33.92, 18.42],   # Cape Town, South Africa (AWS Gateway)
+        [-4.17, 39.45]     # Kwale, Kenya (OneWeb Gateway)
+    ]
+    # Convert list of lists to numpy array first
+    ground_station_array = np.array(range(len(ground_station_locations)))
+    chosen_indices = np.random.choice(ground_station_array, 2, replace=False)
+    GS_lat_long = [ground_station_locations[i] for i in chosen_indices]  # Get the actual coordinates
     hello_interval = 10  # hello_interval(s) in OSPF. 1-200 are supported.
 
     print('Initializing StarryNet...')
@@ -251,6 +294,10 @@ def run_experiment(args):
     shutil.rmtree('/opt/home_dir/outputs')
     # create new output directory
     os.makedirs('/opt/home_dir/outputs')
+    # clear tmp 
+    print("Cleaning up /tmp directory...")
+    subprocess.run(['sudo', 'rm', '-rf', '/tmp/*'])
+    print("Cleanup complete.")
 
 def parse_output_logs():
     output_logs = ['/opt/home_dir/outputs/receiver.log', '/opt/home_dir/outputs/sender.log']
@@ -262,47 +309,86 @@ def parse_output_logs():
 
 def _parse_log(log):
     with open(log, 'r') as f:
-        lines = f.readlines()
+        log_content = f.read()
+    return _parse_log_webrtc_only(log_content)
+
+def _parse_log_webrtc_only(log_content):
     """
-    Lines we care about:
-    - WebRTC.Call.EstimatedSendBitrateInKbps
-	- WebRTC.Video.MediaBitrateReceivedInKbps
-	- WebRTC.Video.EndToEndDelayInMS
-	- WebRTC.Video.EndToEndDelayMaxInMS
-	- WebRTC.Video.ReceivedPacketsLostInPercent
-	- WebRTC.Video.NumberFreezesPerMinute
-    - WebRTC.Video.RenderFramesPerSecond
+    Parses log content to extract metrics starting with "WebRTC.",
+    handling both simple values and periodic samples (min, avg, max),
+    including those with a comma before 'periodic_samples'.
+
+    Args:
+        log_content: A string containing the log data.
+
+    Returns:
+        A dictionary where keys are metric names (e.g., "WebRTC.Video.InputWidthInPixels",
+        "WebRTC.Video.InputFramesPerSecond.min") and values are floats.
     """
     metrics = {}
+    # Regex specifically for periodic samples: captures name, samples, min, avg, max
+    # FIXED: Added optional comma (,?) before potential whitespace (\s*)
+    #        preceding 'periodic_samples:'
+    periodic_pattern = re.compile(
+        r"(WebRTC\.[\w\.]+),?\s*" # Capture name (Group 1), then optional comma, then whitespace
+        r"periodic_samples:(\d+),\s*" # Capture sample count (Group 2)
+        r"\{min:([\d\.-]+),\s*"       # Capture min value (Group 3)
+        r"avg:([\d\.-]+),\s*"       # Capture avg value (Group 4)
+        r"max:([\d\.-]+)\}"         # Capture max value (Group 5)
+    )
+
+    lines = log_content.splitlines() # Split content into lines
+
     for line in lines:
-        if "WebRTC.Call.EstimatedSendBitrateInKbps" in line:
-            # extract the estimate send bitrate
-            estimate_send_bitrate = int(line.split()[-2].split(':')[-1][:-1])
-            metrics["WebRTC.Call.EstimatedSendBitrateInKbps"] = estimate_send_bitrate
-        elif "WebRTC.Video.MediaBitrateReceivedInKbps " in line:
-            # extract the received bitrate
-            receiving_rate = int(line.split()[-1])
-            metrics["WebRTC.Video.MediaBitrateReceivedInKbps"] = receiving_rate
-        elif "WebRTC.Video.EndToEndDelayInMS " in line:
-            # extract the end to end delay
-            end_to_end_delay = int(line.split()[-1])
-            metrics["WebRTC.Video.EndToEndDelayInMS"] = end_to_end_delay
-        elif "WebRTC.Video.EndToEndDelayMaxInMS " in line:
-            # extract the end to end delay max
-            end_to_end_delay_max = int(line.split()[-1])
-            metrics["WebRTC.Video.EndToEndDelayMaxInMS"] = end_to_end_delay_max
-        elif "WebRTC.Video.ReceivedPacketsLostInPercent " in line:
-            # extract the percentage of lost packets
-            packets_lost = int(line.split()[-1])
-            metrics["WebRTC.Video.ReceivedPacketsLostInPercent"] = packets_lost
-        elif "WebRTC.Video.NumberFreezesPerMinute " in line:
-            # extract the number of freezes
-            video_freezes = int(line.split()[-1])
-            metrics["WebRTC.Video.NumberFreezesPerMinute"] = video_freezes
-        elif "WebRTC.Video.RenderFramesPerSecond " in line:
-            # extract the render frames per second
-            render_frames_per_second = int(line.split()[-1])
-            metrics["WebRTC.Video.RenderFramesPerSecond"] = render_frames_per_second
+        line = line.strip()
+        if not line:
+            continue
+
+        # --- Only process lines containing "WebRTC." ---
+        if "WebRTC." in line:
+            # Attempt to match the detailed periodic pattern first
+            match = periodic_pattern.search(line)
+            if match:
+                try:
+                    metric_name = match.group(1)
+                    # samples = int(match.group(2)) # Uncomment if you want to store sample count
+                    min_val = float(match.group(3))
+                    avg_val = float(match.group(4))
+                    max_val = float(match.group(5))
+
+                    # Store min, avg, max as separate metrics
+                    metrics[metric_name + ".min"] = min_val
+                    metrics[metric_name + ".avg"] = avg_val
+                    metrics[metric_name + ".max"] = max_val
+                    # Optionally add samples: metrics[metric_name + ".samples"] = samples
+
+                except (ValueError, IndexError):
+                     # print(f"Warning: Could not parse periodic metric values in line: {line}")
+                     pass # Silently ignore parsing errors for this line
+                # Successfully parsed or failed, move to the next line
+                continue
+
+            # If not periodic, try parsing as a simple WebRTC key-value metric
+            else:
+                try:
+                    # Split based on the first occurrence of "WebRTC."
+                    base_parts = line.split("WebRTC.", 1)
+                    if len(base_parts) == 2:
+                        metric_parts = base_parts[1].split()
+                        if len(metric_parts) >= 2:
+                            metric_name = "WebRTC." + metric_parts[0]
+                            value_str = metric_parts[-1]
+                            # Basic check if the last part looks like a number
+                            if value_str.replace('.', '', 1).replace('-', '', 1).isdigit():
+                                value = float(value_str)
+                                metrics[metric_name] = value
+                            # else: Line contained WebRTC. but didn't end like a simple metric
+                except (ValueError, IndexError):
+                     # print(f"Warning: Could not parse simple WebRTC metric line: {line}")
+                     pass # Silently ignore parsing errors for this line
+                # Continue to the next line
+                continue
+
     return metrics
 
 def main():
