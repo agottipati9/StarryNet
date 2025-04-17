@@ -85,7 +85,6 @@ def sn_load_file(path, GS_lat_long):
     parser.add_argument('--inclination', type=int, default=data['inclination'])
     parser.add_argument('--orbit_number', type=int, default=data['orbit'])
     parser.add_argument('--sat_number', type=int, default=data['sat'])
-    parser.add_argument('--fac_num', type=int, default=len(GS_lat_long))
     parser.add_argument('--link_style', type=str, default=data['link'])
     parser.add_argument('--IP_version', type=str, default=data['ip'])
     parser.add_argument('--link_policy', type=str, default=data['link_policy'])
@@ -110,7 +109,7 @@ def sn_load_file(path, GS_lat_long):
     parser.add_argument('--sat_ground_loss',
                         type=int,
                         default=data['sat_ground_loss'])
-    parser.add_argument('--ground_num', type=int, default=data['ground_num'])
+    parser.add_argument('--GS_num', type=int, default=data['ground_num'])
     parser.add_argument('--multi_machine',
                         type=int,
                         default=data['multi_machine'])
@@ -894,13 +893,14 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
     address_16_23 = (j - constellation_size) & 0xff
     address_8_15 = i & 0xff
     GSL_name = "GSL_" + str(i) + "-" + str(j)
+    subnet = f"9.{address_16_23}.{address_8_15}.0/24"
+    
     # Create internal network in docker.
     sn_remote_cmd(
-        remote_ssh, 'docker network create ' + GSL_name + " --subnet 9." +
-        str(address_16_23) + "." + str(address_8_15) + ".0/24")
-    print('[Create GSL:]' + 'docker network create ' + GSL_name +
-          " --subnet 9." + str(address_16_23) + "." + str(address_8_15) +
-          ".0/24")
+        remote_ssh, 'docker network create ' + GSL_name + " --subnet " + subnet)
+    print('[Create GSL:]' + 'docker network create ' + GSL_name + " --subnet " + subnet)
+    
+    # Connect first node and configure
     sn_remote_cmd(
         remote_ssh, 'docker network connect ' + GSL_name + " " +
         str(container_id_list[i - 1]) + " --ip 9." + str(address_16_23) + "." +
@@ -917,25 +917,21 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
         " ip link set dev " + target_interface + " name " + "B" +
-        str(i - 1 + 1) + "-eth" + str(j))
+        str(i) + "-eth" + str(j))
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
-        " ip link set dev B" + str(i - 1 + 1) + "-eth" + str(j) + " up")
+        " ip link set dev B" + str(i) + "-eth" + str(j) + " up")
+    
+    # Replace any existing qdisc with our new configuration
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
-        " tc qdisc add dev B" + str(i - 1 + 1) + "-eth" + str(j) +
-        " root netem delay " + str(delay) + "ms")
-    sn_remote_cmd(
-        remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
-        " tc qdisc add dev B" + str(i - 1 + 1) + "-eth" + str(j) +
-        " root netem loss " + str(loss) + "%")
-    sn_remote_cmd(
-        remote_ssh, "docker exec -d " + str(container_id_list[i - 1]) +
-        " tc qdisc add dev B" + str(i - 1 + 1) + "-eth" + str(j) +
-        " root netem rate " + str(bw) + "Gbps")
+        " tc qdisc replace dev B" + str(i) + "-eth" + str(j) +
+        " root netem delay " + str(delay) + "ms loss " + str(loss) + "% rate " + str(bw) + "gbit")
     print('[Add current node:]' + 'docker network connect ' + GSL_name + " " +
           str(container_id_list[i - 1]) + " --ip 9." + str(address_16_23) +
           "." + str(address_8_15) + ".50")
+    
+    # Connect second node and configure
     sn_remote_cmd(
         remote_ssh, 'docker network connect ' + GSL_name + " " +
         str(container_id_list[j - 1]) + " --ip 9." + str(address_16_23) + "." +
@@ -952,22 +948,16 @@ def sn_establish_new_GSL(container_id_list, matrix, constellation_size, bw,
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
         " ip link set dev " + target_interface + " name " + "B" + str(j) +
-        "-eth" + str(i - 1 + 1))
+        "-eth" + str(i))
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
-        " ip link set dev B" + str(j) + "-eth" + str(i - 1 + 1) + " up")
+        " ip link set dev B" + str(j) + "-eth" + str(i) + " up")
+    
+    # Replace any existing qdisc with our new configuration
     sn_remote_cmd(
         remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
-        " tc qdisc add dev B" + str(j) + "-eth" + str(i - 1 + 1) +
-        " root netem delay " + str(delay) + "ms")
-    sn_remote_cmd(
-        remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
-        " tc qdisc add dev B" + str(j) + "-eth" + str(i - 1 + 1) +
-        " root netem loss " + str(loss) + "%")
-    sn_remote_cmd(
-        remote_ssh, "docker exec -d " + str(container_id_list[j - 1]) +
-        " tc qdisc add dev B" + str(j) + "-eth" + str(i - 1 + 1) +
-        " root netem rate " + str(bw) + "Gbps")
+        " tc qdisc replace dev B" + str(j) + "-eth" + str(i) +
+        " root netem delay " + str(delay) + "ms loss " + str(loss) + "% rate " + str(bw) + "gbit")
     print('[Add right node:]' + 'docker network connect ' + GSL_name + " " +
           str(container_id_list[j - 1]) + " --ip 9." + str(address_16_23) +
           "." + str(address_8_15) + ".60")

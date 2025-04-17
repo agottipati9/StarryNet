@@ -22,9 +22,12 @@ class StarryNet():
         self.inclination = sn_args.inclination
         self.orbit_number = sn_args.orbit_number
         self.sat_number = sn_args.sat_number
-        self.fac_num = sn_args.fac_num
+        self.GS_num = sn_args.GS_num
+        # Validate GS_num matches GS_lat_long length
+        if self.GS_num != len(GS_lat_long):
+            raise ValueError(f"GS_num ({self.GS_num}) does not match number of ground stations in GS_lat_long ({len(GS_lat_long)})")
         self.constellation_size = self.orbit_number * self.sat_number
-        self.node_size = self.orbit_number * self.sat_number + sn_args.fac_num
+        self.node_size = self.orbit_number * self.sat_number + self.GS_num
         self.link_style = sn_args.link_style
         self.IP_version = sn_args.IP_version
         self.link_policy = sn_args.link_policy
@@ -38,7 +41,6 @@ class StarryNet():
         self.sat_ground_bandwidth = sn_args.sat_ground_bandwidth
         self.sat_loss = sn_args.sat_loss
         self.sat_ground_loss = sn_args.sat_ground_loss
-        self.ground_num = sn_args.ground_num
         self.multi_machine = sn_args.multi_machine
         self.antenna_number = sn_args.antenna_number
         self.antenna_inclination = sn_args.antenna_inclination
@@ -117,7 +119,7 @@ class StarryNet():
         sn_thread = sn_Node_Init_Thread(self.remote_ssh,
                                         self.docker_service_name,
                                         self.node_size, self.container_id_list,
-                                        self.container_global_idx, self.fac_num) # fac_num is the number of ground stations
+                                        self.container_global_idx, self.GS_num) # GS_num is the number of ground stations
         sn_thread.start()
         sn_thread.join()
         self.container_id_list = sn_get_container_info(self.remote_ssh)
@@ -128,7 +130,7 @@ class StarryNet():
         print("Create Links.")
         isl_thread = sn_Link_Init_Thread(
             self.remote_ssh, self.remote_ftp, self.orbit_number,
-            self.sat_number, self.constellation_size, self.fac_num,
+            self.sat_number, self.constellation_size, self.GS_num,
             self.file_path, self.configuration_file_path, self.sat_bandwidth,
             self.sat_ground_bandwidth, self.sat_loss, self.sat_ground_loss)
         isl_thread.start()
@@ -138,7 +140,7 @@ class StarryNet():
     def run_routing_deamon(self):
         routing_thread = sn_Routing_Init_Thread(
             self.remote_ssh, self.remote_ftp, self.orbit_number,
-            self.sat_number, self.constellation_size, self.fac_num,
+            self.sat_number, self.constellation_size, self.GS_num,
             self.file_path, self.sat_bandwidth, self.sat_ground_bandwidth,
             self.sat_loss, self.sat_ground_loss)
         routing_thread.start()
@@ -150,7 +152,7 @@ class StarryNet():
         sn_thread = sn_RTC_Node_Init_Thread(self.remote_ssh,
                                         self.docker_service_name,
                                         self.node_size, self.container_id_list,
-                                        self.container_global_idx, self.fac_num) # fac_num is the number of ground stations
+                                        self.container_global_idx, self.GS_num) # GS_num is the number of ground stations
         sn_thread.start()
         sn_thread.join()
         container_id_list = sn_get_container_info(self.remote_ssh)

@@ -240,19 +240,12 @@ def sn_ISL_establish(current_sat_id, current_orbit_id, container_id_list,
 
 def sn_establish_ISLs(container_id_list, matrix, orbit_num, sat_num,
                       constellation_size, bw, loss):
-    ISL_threads = []
+    # Process ISLs sequentially to avoid race conditions
     for current_orbit_id in range(0, orbit_num):
         for current_sat_id in range(0, sat_num):
-            ISL_thread = threading.Thread(
-                target=sn_ISL_establish,
-                args=(current_sat_id, current_orbit_id, container_id_list,
-                      orbit_num, sat_num, constellation_size, matrix, bw,
-                      loss))
-            ISL_threads.append(ISL_thread)
-    for ISL_thread in ISL_threads:
-        ISL_thread.start()
-    for ISL_thread in ISL_threads:
-        ISL_thread.join()
+            sn_ISL_establish(current_sat_id, current_orbit_id, container_id_list,
+                           orbit_num, sat_num, constellation_size, matrix, bw,
+                           loss)
 
 
 def sn_get_param(file_):

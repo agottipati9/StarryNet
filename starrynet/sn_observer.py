@@ -11,7 +11,7 @@ from starrynet.sn_utils import *
 _ = inf = 999999  # inf
 
 # To calculate the connection between satellites and GSes in time_in
-# fac_num: number of GSes
+# GS_num: number of ground stations
 
 
 class Observer():
@@ -34,19 +34,19 @@ class Observer():
         self.hello_interval = hello_interval
         self.AS = AS
 
-    def access_P_L_shortest(self, sat_cbf, fac_cbf, fac_num, sat_num,
-                            num_orbits, num_sats_per_orbit, duration, fac_ll,
+    def access_P_L_shortest(self, sat_cbf, GS_cbf, GS_num, sat_num,
+                            orbit_number, sat_number, duration, fac_ll,
                             sat_lla, bound_dis, alpha, antenna_num, path):
-        delay_matrix = np.zeros((fac_num + sat_num, fac_num + sat_num))
+        delay_matrix = np.zeros((GS_num + sat_num, GS_num + sat_num))
         for cur_time in range(duration):
-            for i in range(0, fac_num):
+            for i in range(0, GS_num):
                 access_list = {}
                 fac_lat = float(fac_ll[i][0])  # latitude
                 up_lat = fac_lat + alpha  # bound
                 down_lat = fac_lat - alpha
-                x2 = fac_cbf[i][0]
-                y2 = fac_cbf[i][1]
-                z2 = fac_cbf[i][2]
+                x2 = GS_cbf[i][0]
+                y2 = GS_cbf[i][1]
+                z2 = GS_cbf[i][2]
                 for j in range(0, sat_num):
                     if sat_lla[cur_time][j][0] >= down_lat and sat_lla[
                             cur_time][j][0] <= up_lat:
@@ -77,18 +77,18 @@ class Observer():
                                               299792.458) * 1000  # ms
                         delay_matrix[sat_num + i][key] = delay_time
                         delay_matrix[key][sat_num + i] = delay_time
-            for i in range(num_orbits):
-                for j in range(num_sats_per_orbit):
-                    num_sat1 = i * num_sats_per_orbit + j
+            for i in range(orbit_number):
+                for j in range(sat_number):
+                    num_sat1 = i * sat_number + j
                     x1 = sat_cbf[cur_time][num_sat1][0]  # km
                     y1 = sat_cbf[cur_time][num_sat1][1]
                     z1 = sat_cbf[cur_time][num_sat1][2]
-                    num_sat2 = i * num_sats_per_orbit + (
-                        j + 1) % num_sats_per_orbit
+                    num_sat2 = i * sat_number + (
+                        j + 1) % sat_number
                     x2 = sat_cbf[cur_time][num_sat2][0]  # km
                     y2 = sat_cbf[cur_time][num_sat2][1]
                     z2 = sat_cbf[cur_time][num_sat2][2]
-                    num_sat3 = ((i + 1) % num_orbits) * num_sats_per_orbit + j
+                    num_sat3 = ((i + 1) % orbit_number) * sat_number + j
                     x3 = sat_cbf[cur_time][num_sat3][0]  # km
                     y3 = sat_cbf[cur_time][num_sat3][1]
                     z3 = sat_cbf[cur_time][num_sat3][2]
@@ -219,7 +219,7 @@ class Observer():
         ]  # first dimension: time. second dimension: node. third dimension: xyz
         sat_lla = [
         ]  # first dimension: time. second dimension: node. third dimension: lla
-        fac_cbf = []  # first dimension: node. second dimension: xyz
+        GS_cbf = []  # first dimension: node. second dimension: xyz
 
         if os.path.exists(path + '/delay') == True:
             osstr = "rm -f " + path + "/delay/*"
@@ -301,12 +301,12 @@ class Observer():
             sat_lla.append(lla_per_sec[t])
 
         if len(self.GS_lat_long) != 0:
-            fac_cbf = self.to_cbf(self.GS_lat_long, len(self.GS_lat_long))
+            GS_cbf = self.to_cbf(self.GS_lat_long, len(self.GS_lat_long))
 
         alpha = np.degrees(
             np.arccos(6371 / (6371 + self.satellite_altitude) *
                       np.cos(np.radians(inclination)))) - inclination
-        self.access_P_L_shortest(sat_cbf, fac_cbf, len(self.GS_lat_long),
+        self.access_P_L_shortest(sat_cbf, GS_cbf, len(self.GS_lat_long),
                                  self.sat_number * self.orbit_number,
                                  self.orbit_number, self.sat_number,
                                  self.duration, self.GS_lat_long, sat_lla,
