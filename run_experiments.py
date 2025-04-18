@@ -51,10 +51,10 @@ BASE_CONFIG = {
 
 # Define Scenario IDs (adjust as needed)
 SCENARIOS = {
-    1: "Stable_LEO_(Best_Case_Control)",
-    2: "Typical_Churn_LEO_(Exp_1_Base)", 
-    3: "Maneuver_Scenario_Density_(Exp_2_Base)",
-    4: "Partial_Deployment_Sparse_LEO_(Exp_3_Base)",
+    1: "Stable_LEO_Best_Case_Control",
+    2: "Typical_Churn_LEO_Exp_1_Base", 
+    3: "Maneuver_Scenario_Density_Exp_2_Base",
+    4: "Partial_Deployment_Sparse_LEO_Exp_3_Base",
     5: "Extreme_GSL_Churn",
     6: "Extreme_ISL_Churn", 
     7: "Extreme_Loss",
@@ -310,17 +310,18 @@ def run_experiment(args):
     sn.stop_emulation()
 
     # parse output logs
+    print("Parsing output logs...")
     results = parse_output_logs()
     # save results
-    if not os.path.exists('/mydata/gcc_baselines'):
-        os.makedirs('/mydata/gcc_baselines')
+    if not os.path.exists('/mydata/gcc_baselines/'):
+        os.makedirs('/mydata/gcc_baselines/')
     # save results to output directory
     with open(f'/mydata/gcc_baselines/{args.experiment_id}.json', 'w') as f:
         json.dump(results, f, indent=2)
     # clean output directory
     print("Cleaning up /tmp and /outputs directory...")
-    subprocess.run(['sudo', 'rm', '-rf', '/opt/home_dir/outputs/*'])
-    subprocess.run(['sudo', 'rm', '-rf', '/tmp/*'])
+    os.system('sudo rm -rf /opt/home_dir/outputs/*')
+    os.system('sudo rm -rf /tmp/*')
     print("Cleanup complete.")
 
 def parse_output_logs():
