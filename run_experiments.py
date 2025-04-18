@@ -15,6 +15,7 @@ import pandas as pd
 import shutil
 import os
 from datetime import datetime
+import re
 
 # Define the base configuration using parameters from your example
 # Note: Adjusted Altitude to 550km as a more typical LEO baseline,
@@ -50,16 +51,45 @@ BASE_CONFIG = {
 
 # Define Scenario IDs (adjust as needed)
 SCENARIOS = {
-    1: "Stable LEO (Best-Case Control)",
-    2: "Typical Churn LEO (Exp 1 Base)",
-    3: "Maneuver Scenario Density (Exp 2 Base)",
-    4: "Partial Deployment/Sparse LEO (Exp 3 Base)",
-    5: "Extreme GSL Churn",
-    6: "Extreme ISL Churn",
-    7: "Extreme Loss",
-    8: "Extreme Maneuvers",
-    9: "Random PersistentDisruptions"
+    1: "Stable_LEO_(Best_Case_Control)",
+    2: "Typical_Churn_LEO_(Exp_1_Base)", 
+    3: "Maneuver_Scenario_Density_(Exp_2_Base)",
+    4: "Partial_Deployment_Sparse_LEO_(Exp_3_Base)",
+    5: "Extreme_GSL_Churn",
+    6: "Extreme_ISL_Churn", 
+    7: "Extreme_Loss",
+    8: "Extreme_Maneuvers",
+    9: "Random_Persistent_Disruptions"
 }
+
+def set_call_duration(n_nodes):
+    # NOTE: we adjust call runtime based on scenario due to load on node
+    # TODO: we need to test each scenario to ensure calls finish before emulation ends
+    # 50 containers ~ 3 minutes to ???
+    # 80 containers ~ 4 minutes to ???
+    # 100 containers ~ 5 minutes to ???
+    # 150 containers ~ 7 minutes to ???
+    if n_nodes <= 50:
+        call_duration = 180
+    elif n_nodes <= 80:
+        call_duration = 240
+    elif n_nodes <= 100:
+        call_duration = 300
+    else:
+        call_duration = 420
+    with open('/opt/home_dir/AlphaRTC/configs/sender.json', 'r') as f:
+        sender_config = json.load(f)
+    with open('/opt/home_dir/AlphaRTC/configs/receiver.json', 'r') as f:
+        receiver_config = json.load(f)
+    sender_config['serverless_connection']['autoclose'] = call_duration
+    receiver_config['serverless_connection']['autoclose'] = call_duration
+    # save configs
+    with open('/opt/home_dir/AlphaRTC/configs/sender.json', 'w') as f:
+        json.dump(sender_config, f, indent=2)
+    with open('/opt/home_dir/AlphaRTC/configs/receiver.json', 'w') as f:
+        json.dump(receiver_config, f, indent=2)
+    print(f"Call duration set to {call_duration} seconds")
+
 
 def generate_config(scenario_id):
     """
@@ -84,13 +114,7 @@ def generate_config(scenario_id):
     scenario_name = SCENARIOS[scenario_id]
 
     print(f"Generating config for Scenario {scenario_id}: {scenario_name}")
-
-    # TODO: we should probably adjust call runtime based on scenario due to load on node
-    #  we need to test each scenario to ensure calls finish before emulation ends
-    # 50 containers ~ ???
-    # 80 containers ~ ???
-    # 100 containers ~ 5 minutes
-    # 150 containers ~ ???
+    
     # --- Control Cases ---
     if scenario_id == 1: # Stable LEO (Best-Case Control)
         config["Altitude (km)"] = 1200 # Higher altitude reduces GSL churn
@@ -183,7 +207,7 @@ def generate_config(scenario_id):
     total_sats = config["# of orbit"] * config["# of satellites"]
     if total_sats > 150:
         print(f"Warning: Scenario {scenario_id} configuration resulted in {total_sats} satellites, exceeding the 150 limit. Adjust parameters.")
-        
+    set_call_duration(total_sats)
     return config
 
 def run_experiment(args):
@@ -279,7 +303,10 @@ def run_experiment(args):
 
     sn.set_video_call(26, 27, 5)  # start video call. NOTE: these indices are not used as sender and receiver are already set.
 
+    start_time = time.time()
     sn.start_emulation()
+    end_time = time.time()
+    print(f"Emulation time: {end_time - start_time} seconds")
     sn.stop_emulation()
 
     # parse output logs
@@ -291,11 +318,8 @@ def run_experiment(args):
     with open(f'/mydata/gcc_baselines/{args.experiment_id}.json', 'w') as f:
         json.dump(results, f, indent=2)
     # clean output directory
-    shutil.rmtree('/opt/home_dir/outputs')
-    # create new output directory
-    os.makedirs('/opt/home_dir/outputs')
-    # clear tmp 
-    print("Cleaning up /tmp directory...")
+    print("Cleaning up /tmp and /outputs directory...")
+    subprocess.run(['sudo', 'rm', '-rf', '/opt/home_dir/outputs/*'])
     subprocess.run(['sudo', 'rm', '-rf', '/tmp/*'])
     print("Cleanup complete.")
 
@@ -427,7 +451,7 @@ def main():
     experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     args.experiment_id = experiment_id + "_" + SCENARIOS[args.exp]
     # run experiment and save results
-    run_experiment(args, experiment_id)
+    run_experiment(args)
 
 if __name__ == "__main__":
     main()

@@ -140,6 +140,7 @@ def sn_load_file(path, GS_lat_long):
                         '-g',
                         type=str,
                         default="50.110924/8.682127/46.635700/14.311817")
+    parser.add_argument('--exp', type=int, default=1)
 
     sn_args = parser.parse_args()
     return sn_args
