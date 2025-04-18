@@ -63,20 +63,23 @@ SCENARIOS = {
 }
 
 def set_call_duration(n_nodes):
-    # NOTE: we adjust call runtime based on scenario due to load on node
-    # TODO: we need to test each scenario to ensure calls finish before emulation ends
-    # 50 containers ~ 3 minutes to ???
-    # 80 containers ~ 4 minutes to ???
-    # 100 containers ~ 5 minutes to ???
-    # 150 containers ~ 7 minutes to ???
+    # NOTE: we adjust call runtime based on scenario due to load on node (emulation clock time)
+    # 50 containers ~ 3 minutes --> make emulation wait at least 3.5 minutes
+    # 80 containers ~ 4 minutes --> make emulation wait at least 4.5 minutes
+    # 100 containers ~ 5 minutes --> make emulation wait at least 5.5 minutes
+    # 150 containers ~ 8 minutes --> make emulation wait at least 8.5 minutes
     if n_nodes <= 50:
         call_duration = 180
+        total_duration = 210
     elif n_nodes <= 80:
         call_duration = 240
+        total_duration = 270
     elif n_nodes <= 100:
         call_duration = 300
+        total_duration = 330
     else:
-        call_duration = 420
+        call_duration = 480
+        total_duration = 510
     with open('/opt/home_dir/AlphaRTC/configs/sender.json', 'r') as f:
         sender_config = json.load(f)
     with open('/opt/home_dir/AlphaRTC/configs/receiver.json', 'r') as f:
@@ -89,6 +92,7 @@ def set_call_duration(n_nodes):
     with open('/opt/home_dir/AlphaRTC/configs/receiver.json', 'w') as f:
         json.dump(receiver_config, f, indent=2)
     print(f"Call duration set to {call_duration} seconds")
+    return total_duration
 
 
 def generate_config(scenario_id):
@@ -123,8 +127,8 @@ def generate_config(scenario_id):
         config["# of satellites"] = 10 # Max density within 150 limit (15x10=150)
         config["satellite link loss (\"X\"% )"] = 0.01 # Minimal loss
         config["sat-ground loss (\"X\"% )"] = 0.01    # Minimal loss
-        config["satellite link bandwidth (\"X\" Gbps)"] = 10 # High BW
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 10    # High BW
+        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
+        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
     # --- Non-Extreme LEO Tests (Based on 10 fixed orbits) ---
     elif scenario_id == 2: # Typical Churn LEO (Exp 1 Base)
@@ -151,7 +155,7 @@ def generate_config(scenario_id):
 
     elif scenario_id == 4: # Partial Deployment/Sparse LEO (Exp 3 Base)
         config["Altitude (km)"] = 550
-        config["antenna_inclination_angle"] = 25  # NOTE: for extreme scenarios, this should be 45 to increase churn
+        config["antenna_inclination_angle"] = 25  # NOTE: for extreme scenarios, this should be X to increase churn
         config["# of orbit"] = 10
         config["# of satellites"] = 5 # Sparse density (50 total) - high ISL churn expected, NOTE: for extreme scenarios, this should 25-30
         config["satellite link loss (\"X\"% )"] = 1  # NOTE: for extreme scenarios, this should be 2-5%
@@ -161,14 +165,14 @@ def generate_config(scenario_id):
 
     # --- Extreme LEO Tests ---
     elif scenario_id == 5: # Extreme GSL Churn
-        config["Altitude (km)"] = 400 # Lowest plausible altitude
-        config["antenna_inclination_angle"] = 45 # Highest plausible angle
+        config["Altitude (km)"] = 450 # Lowest plausible altitude  TODO: if this is low, then inclination angle needs to increase
+        config["antenna_inclination_angle"] = 25 # Highest plausible angle TODO: > 25 leads rtc peers unable to connect? we tried 45 and 400 before
         config["# of orbit"] = 10
         config["# of satellites"] = 5 # Sparse density (50 total)
         config["satellite link loss (\"X\"% )"] = 0.01 # Low loss to isolate churn
         config["sat-ground loss (\"X\"% )"] = 0.01    # Low loss to isolate churn
-        config["satellite link bandwidth (\"X\" Gbps)"] = 10 # High BW
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 10    # High BW
+        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
+        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
     elif scenario_id == 6: # Extreme ISL Churn
         config["Altitude (km)"] = 550 # Standard altitude
@@ -177,8 +181,8 @@ def generate_config(scenario_id):
         config["# of satellites"] = 10 # Few sats per orbit (50 total) - Max sparsity
         config["satellite link loss (\"X\"% )"] = 0.01 # Low loss to isolate churn
         config["sat-ground loss (\"X\"% )"] = 0.01    # Low loss to isolate churn
-        config["satellite link bandwidth (\"X\" Gbps)"] = 10 # High BW
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 10    # High BW
+        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
+        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
     elif scenario_id == 7: # Extreme Loss
         config["Altitude (km)"] = 550 # Use a moderately stable base
@@ -207,10 +211,10 @@ def generate_config(scenario_id):
     total_sats = config["# of orbit"] * config["# of satellites"]
     if total_sats > 150:
         print(f"Warning: Scenario {scenario_id} configuration resulted in {total_sats} satellites, exceeding the 150 limit. Adjust parameters.")
-    set_call_duration(total_sats)
-    return config
+    total_duration = set_call_duration(total_sats)
+    return config, total_duration
 
-def run_experiment(args):
+def run_experiment(args, total_duration):
     # get the number of nodes
     with open(args.outfile, 'r') as f:
         config = json.load(f)
@@ -307,6 +311,9 @@ def run_experiment(args):
     sn.start_emulation()
     end_time = time.time()
     print(f"Emulation time: {end_time - start_time} seconds")
+    # NOTE: sometimes the emulation ends before the call ends, so we wait until the call ends
+    while time.time() - start_time < total_duration:
+        time.sleep(1)
     sn.stop_emulation()
 
     # parse output logs
@@ -428,7 +435,7 @@ def main():
 
     args = parser.parse_args()
 
-    generated_config = generate_config(args.exp)
+    generated_config, total_duration = generate_config(args.exp)
 
     if generated_config:
         if args.outfile:
@@ -452,7 +459,7 @@ def main():
     experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     args.experiment_id = experiment_id + "_" + SCENARIOS[args.exp]
     # run experiment and save results
-    run_experiment(args)
+    run_experiment(args, total_duration)
 
 if __name__ == "__main__":
     main()
