@@ -17,6 +17,8 @@ import os
 from datetime import datetime
 import re
 
+TOTAL_EMULATION_TIME = 125
+
 # Define the base configuration using parameters from your example
 # Note: Adjusted Altitude to 550km as a more typical LEO baseline,
 # Stable case will override this. Loss/BW kept as 1%/1Gbps default.
@@ -28,7 +30,7 @@ BASE_CONFIG = {
   "Phase shift": 1,           # Keep constant unless specifically testing this
   "# of orbit": 10,           # Default number of orbits
   "# of satellites": 10,        # Default satellites per orbit (100 total)
-  "Duration (s)": 125,        # Default to 2 emulation minutes (~300s)
+  "Duration (s)": TOTAL_EMULATION_TIME,        # Default to 2 emulation minutes (~300s)
   "update_time (s)": 1,
   "satellite link bandwidth (\"X\" Gbps)": 1, # Default bandwidth
   "sat-ground bandwidth (\"X\" Gbps)": 1,    # Default bandwidth
@@ -51,15 +53,10 @@ BASE_CONFIG = {
 
 # Define Scenario IDs (adjust as needed)
 SCENARIOS = {
-    1: "Stable_LEO_Best_Case_Control",
-    2: "Typical_Churn_LEO_Exp_1_Base", 
-    3: "Maneuver_Scenario_Density_Exp_2_Base",
-    4: "Partial_Deployment_Sparse_LEO_Exp_3_Base",
-    5: "Extreme_GSL_Churn",
-    6: "Extreme_ISL_Churn", 
-    7: "Extreme_Loss",
-    8: "Extreme_Maneuvers",
-    9: "Random_Persistent_Disruptions"
+    1: "Stable",
+    2: "Typical", 
+    3: "Maneuvers",
+    4: "Churn",
 }
 
 def set_call_duration(n_nodes):
@@ -130,8 +127,8 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
-    # --- Non-Extreme LEO Tests (Based on 10 fixed orbits) ---
-    elif scenario_id == 2: # Typical Churn LEO (Exp 1 Base)
+    # --- Typical LEO with low churn (100 sats Based on 10 fixed orbits)
+    elif scenario_id == 2:
         config["Altitude (km)"] = 550 # Standard LEO altitude
         config["antenna_inclination_angle"] = 25 # Standard angle
         config["# of orbit"] = 10
@@ -141,7 +138,7 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # Standard BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # Standard BW
 
-    elif scenario_id == 3: # Maneuver Scenario Density (Exp 2 Base)
+    elif scenario_id == 3: # Maneuver Scenarios
         # Note: Actual maneuvers require external simulation/injection.
         # This config sets the density context (~80 sats).
         config["Altitude (km)"] = 550
@@ -153,59 +150,15 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1
 
-    elif scenario_id == 4: # Partial Deployment/Sparse LEO (Exp 3 Base)
-        config["Altitude (km)"] = 550
-        config["antenna_inclination_angle"] = 25  # NOTE: for extreme scenarios, this should be X to increase churn
-        config["# of orbit"] = 10
-        config["# of satellites"] = 5 # Sparse density (50 total) - high ISL churn expected, NOTE: for extreme scenarios, this should 25-30
-        config["satellite link loss (\"X\"% )"] = 1  # NOTE: for extreme scenarios, this should be 2-5%
-        config["sat-ground loss (\"X\"% )"] = 1
-        config["satellite link bandwidth (\"X\" Gbps)"] = 1
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 1
-
-    # --- Extreme LEO Tests ---
-    elif scenario_id == 5: # Extreme GSL Churn
-        config["Altitude (km)"] = 450 # Lowest plausible altitude  TODO: if this is low, then inclination angle needs to increase
-        config["antenna_inclination_angle"] = 25 # Highest plausible angle TODO: > 25 leads rtc peers unable to connect? we tried 45 and 400 before
-        config["# of orbit"] = 10
-        config["# of satellites"] = 5 # Sparse density (50 total)
-        config["satellite link loss (\"X\"% )"] = 0.01 # Low loss to isolate churn
-        config["sat-ground loss (\"X\"% )"] = 0.01    # Low loss to isolate churn
-        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
-
-    elif scenario_id == 6: # Extreme ISL Churn
+    elif scenario_id == 4: # Frequent ISL Churn
         config["Altitude (km)"] = 550 # Standard altitude
         config["antenna_inclination_angle"] = 25 # Standard angle
-        config["# of orbit"] = 5  # Fewest orbits
-        config["# of satellites"] = 10 # Few sats per orbit (50 total) - Max sparsity
-        config["satellite link loss (\"X\"% )"] = 0.01 # Low loss to isolate churn
-        config["sat-ground loss (\"X\"% )"] = 0.01    # Low loss to isolate churn
+        config["# of orbit"] = 10
+        config["# of satellites"] = 5 # Few sats per orbit (50 total) - Max sparsity
+        config["satellite link loss (\"X\"% )"] = 1 # Low loss to isolate churn
+        config["sat-ground loss (\"X\"% )"] = 1    # Low loss to isolate churn
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
-
-    elif scenario_id == 7: # Extreme Loss
-        config["Altitude (km)"] = 550 # Use a moderately stable base
-        config["antenna_inclination_angle"] = 25
-        config["# of orbit"] = 10
-        config["# of satellites"] = 10 # Moderate density (100 total)
-        config["satellite link loss (\"X\"% )"] = 10 # High loss
-        config["sat-ground loss (\"X\"% )"] = 10    # High loss
-        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # Standard BW
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # Standard BW
-
-    elif scenario_id == 8 or scenario_id == 9: # Extreme Disruption Base Config
-        # Note: Actual disruptions require external injection (e.g., set_damage).
-        # This config provides a stable base network for the disruption test.
-        # Using the 'Stable LEO' config parameters as the base.
-        config["Altitude (km)"] = 1200
-        config["antenna_inclination_angle"] = 15
-        config["# of orbit"] = 15
-        config["# of satellites"] = 10 # Max density (150 total)
-        config["satellite link loss (\"X\"% )"] = 0.01 # Low loss
-        config["sat-ground loss (\"X\"% )"] = 0.01    # Low loss
-        config["satellite link bandwidth (\"X\" Gbps)"] = 1 # Standard BW (easier to see disruption impact)
-        config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # Standard BW
 
     # Ensure total satellites doesn't exceed 150
     total_sats = config["# of orbit"] * config["# of satellites"]
@@ -277,33 +230,17 @@ def run_experiment(args, total_duration):
     sn.create_rtc_nodes()
 
     # Set damage parameters based on experiment scenario
-    if args.exp == 3:  # Maneuver Scenario Density scenario
-        ratio = np.random.uniform(0.05, 0.1)   # 5%-10% network damage
-        step = np.random.randint(10, 15)  # NOTE: for extreme maneuvers, step is 5-10s
-        time_steps = []
-        for i in range(10, 115, step):
-            sn.set_damage(ratio, i)
-            time_steps.append(i)
-        recovery_time = np.random.randint(5, 10)  # NOTE: for extreme maneuvers, recovery time is 30-60s
-        for time_step in time_steps:
-            sn.set_recovery(time_step + recovery_time)
-    elif args.exp == 7:  # Extreme Loss scenario
-        ratio = np.random.uniform(0.05, 0.1)   # 5%-10% network damage
-        time_index = np.random.randint(10, 115)  # Damage occurs 10-115s into simulation
-        print(f'Applying {ratio*100}% network damage at t={time_index}s')
-        sn.set_damage(ratio, time_index)
-    elif args.exp == 8:  # Extreme Disruption scenario
-        ratio = np.random.uniform(0.1, 0.5)    # 10%-50% network damage
-        time_index = np.random.randint(10, 115)  # Damage occurs 10-115s into simulation
-        print(f'Applying {ratio*100}% network damage at t={time_index}s')
-        sn.set_damage(ratio, time_index)
-    elif args.exp == 9:  # Random Persistent Disruptions scenario
-        ratio = np.random.uniform(0.0, 0.1)   # 0%-1% network damage
-        time_index = 10
-        while time_index < 115:
-            sn.set_damage(ratio, time_index)
-            time_index += np.random.randint(1, 10)  # apply damage every 1-10s
-    # Add other experiment-specific damage scenarios as needed
+    call_offset = 10
+    if args.exp == 3:  # Add maneuvers to LEO scenarios
+        # Model maneuvers as a Poisson process
+        maneuver_rate = np.random.uniform(0.02, 0.05) # 1/50 to 1/20 events/sec
+        num_maneuvers = np.random.poisson(maneuver_rate * (TOTAL_EMULATION_TIME - call_offset))  # Number of maneuvers
+        maneuver_times = np.sort(np.random.uniform(call_offset, TOTAL_EMULATION_TIME, num_maneuvers))  # Random times
+        for t in maneuver_times:
+            ratio = np.random.uniform(0.05, 0.1) # 5-10% 
+            sn.set_damage(ratio, int(t))  # Apply maneuver at time t
+            recovery_time = np.random.randint(5, 10) # Recovery time 5-10s
+            sn.set_recovery(int(t) + recovery_time)  # Restore network
 
     sn.set_video_call(26, 27, 5)  # start video call. NOTE: these indices are not used as sender and receiver are already set.
 
