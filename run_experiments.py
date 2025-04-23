@@ -255,26 +255,42 @@ def run_experiment(args, total_duration):
 
     # parse output logs
     print("Parsing output logs...")
-    results = parse_output_logs()
     # save results
-    if not os.path.exists('/mydata/gcc_baselines/'):
-        os.makedirs('/mydata/gcc_baselines/')
-    # save results to output directory
-    with open(f'/mydata/gcc_baselines/{args.experiment_id}.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    # clean output directory
-    print("Cleaning up /tmp and /outputs directory...")
-    os.system('sudo rm -rf /opt/home_dir/outputs/*')
-    os.system('sudo rm -rf /tmp/*')
-    print("Cleanup complete.")
+    output_dir = f'/mydata/gcc_baselines'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    results = parse_output_logs(output_dir, args.experiment_id)
 
-def parse_output_logs():
-    output_logs = ['/opt/home_dir/outputs/receiver.log', '/opt/home_dir/outputs/sender.log']
+
+def run_command(command):
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    out, err = process.communicate()
+    return_code = process.returncode
+    return out, err, return_code
+
+def parse_output_logs(output_dir, experiment_id):
+    # Parse packet info in logs
+    results_path = '/opt/home_dir/outputs'
+    post_processing_cmd = f"python /opt/home_dir/StarryNet/process_packetinfo_logs.py --output_dir {results_path}"
+    run_command(post_processing_cmd)
+    if os.path.exists(f'{results_path}/call_metrics.json'):
+        os.rename(f'{results_path}/call_metrics.json', f'{results_path}/packet_info_{experiment_id}.json')
+        shutil.move(f'{results_path}/packet_info_{experiment_id}.json', f'{output_dir}/packet_info_{experiment_id}.json')
+    # TODO: refactor this (duplicate logic)
+    output_logs = [f'{results_path}/receiver.log', f'{results_path}/sender.log']
     all_metrics = {}
     for log in output_logs:
         metrics = _parse_log(log)
         all_metrics[log] = metrics
-    return all_metrics
+    # save results to output directory
+    with open(f'{output_dir}/{experiment_id}.json', 'w') as f:
+        json.dump(all_metrics, f, indent=2)
+    # clean output directory
+    print("Cleaning up /tmp and /outputs directory...")
+    os.system(f'sudo rm -rf {results_path}/*')
+    os.system('sudo rm -rf /tmp/*')
+    print("Cleanup complete.")
+
 
 def _parse_log(log):
     with open(log, 'r') as f:
