@@ -256,7 +256,7 @@ def run_experiment(args, total_duration):
     # parse output logs
     print("Parsing output logs...")
     # save results
-    output_dir = f'/mydata/gcc_baselines'
+    output_dir = f'/mydata/offline_baselines'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     results = parse_output_logs(output_dir, args.experiment_id)

@@ -11,7 +11,3 @@ for exp in $(seq $START_EXP $END_EXP); do
         sudo python run_experiments.py --exp $exp
     done
 done
-
-
-
-
