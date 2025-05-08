@@ -16,7 +16,7 @@ import shutil
 import os
 from datetime import datetime
 import re
-
+import glob
 TOTAL_EMULATION_TIME = 125
 
 # Define the base configuration using parameters from your example
@@ -256,11 +256,23 @@ def run_experiment(args, total_duration):
     # parse output logs
     print("Parsing output logs...")
     # save results
-    output_dir = f'/mydata/gcc_baselines'
+    output_dir = f'/mydata/gcc_baselines/{args.experiment_id}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    copy_satellite_files(config, output_dir, args.experiment_id)
     results = parse_output_logs(output_dir, args.experiment_id)
 
+
+def copy_satellite_files(config, output_dir, experiment_id):
+    glob_pattern = f"/opt/home_dir/StarryNet/{config['Name']}-{config['# of orbit']}-{config['# of satellites']}*"
+    folders = glob.glob(glob_pattern)
+    for folder in folders:
+        # copy position and delay files to output directory
+        shutil.copytree(f"{folder}/position", f"{output_dir}/position")
+        shutil.copytree(f"{folder}/satellite_features", f"{output_dir}/satellite_features")
+        shutil.copytree(f"{folder}/delay", f"{output_dir}/delay")
+    # copy the config file to output directory
+    shutil.copy(f"/opt/home_dir/StarryNet/config.json", f"{output_dir}/config.json")
 
 def run_command(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)

@@ -36,8 +36,15 @@ class Observer():
 
     def access_P_L_shortest(self, sat_cbf, GS_cbf, GS_num, sat_num,
                             orbit_number, sat_number, duration, fac_ll,
-                            sat_lla, bound_dis, alpha, antenna_num, path):
+                            sat_lla, bound_dis, alpha, antenna_num, path, sat_vel):
         delay_matrix = np.zeros((GS_num + sat_num, GS_num + sat_num))
+        
+        # Create directory for logging if it doesn't exist
+        # NOTE: For storing satellite specific features
+        satellite_feature_dir = path + "/satellite_features"
+        if not os.path.exists(satellite_feature_dir):
+            os.makedirs(satellite_feature_dir)
+            
         for cur_time in range(duration):
             for i in range(0, GS_num):
                 access_list = {}
@@ -47,6 +54,10 @@ class Observer():
                 x2 = GS_cbf[i][0]
                 y2 = GS_cbf[i][1]
                 z2 = GS_cbf[i][2]
+                
+                # Store satellite info for logging
+                sat_info = {}
+                
                 for j in range(0, sat_num):
                     if sat_lla[cur_time][j][0] >= down_lat and sat_lla[
                             cur_time][j][0] <= up_lat:
@@ -59,10 +70,23 @@ class Observer():
                         if dist < bound_dis:
                             # [satellite index，distance]
                             access_list.update({j: dist})
+                            sat_info.update({
+                                j: {
+                                    'distance': dist,
+                                    'lla': sat_lla[cur_time][j],
+                                    'velocity': sat_vel[cur_time][j],
+                                    'delay': -1
+                                }
+                            })
+                
+                
+                sorted_access_list = dict(sorted(access_list.items(), key=lambda item: item[1]))
                 if len(access_list) > antenna_num:
-                    sorted_access_list = dict(
-                        sorted(access_list.items(), key=lambda item: item[1]))
                     cnt = 0
+                    # NOTE: log satellite-specific features
+                    for key, value in sorted_access_list.items():
+                        delay = value / (17.31 / 29.5 * 299792.458) * 1000  # ms
+                        sat_info[key]['delay'] = delay
                     for key, value in sorted_access_list.items():
                         cnt = cnt + 1
                         if cnt > antenna_num:
@@ -72,11 +96,38 @@ class Observer():
                         delay_matrix[sat_num + i][key] = delay_time
                         delay_matrix[key][sat_num + i] = delay_time
                 elif len(access_list) != 0:
-                    for key, value in access_list.items():
+                    for key, value in sorted_access_list.items():
                         delay_time = value / (17.31 / 29.5 *
                                               299792.458) * 1000  # ms
                         delay_matrix[sat_num + i][key] = delay_time
                         delay_matrix[key][sat_num + i] = delay_time
+                # # NOTE: make sure the length of sat_info is 5
+                if len(sat_info) > 5:
+                    sat_info = dict(list(sat_info.items())[:5])
+                elif len(sat_info) < 5:
+                    for index in range(5 - len(sat_info)):
+                        sat_info.update({
+                            -index - 1: {
+                                'distance': -1,
+                                'lla': -1, 
+                                'velocity': -1,
+                                'delay': -1
+                            }
+                        })
+                # Log the information
+                log_file = f"{satellite_feature_dir}/gs_{i}_time_{cur_time}.txt"
+                with open(log_file, 'w') as f:
+                    f.write(f"Ground Station {i} at time {cur_time}\n")
+                    f.write(f"GS Location: {fac_ll[i]}\n\n")
+                    for k, sat in enumerate(sat_info, 1):
+                        f.write(f"Satellite {k}:\n")
+                        f.write(f"ID: {sat}\n")
+                        f.write(f"Distance: {sat_info[sat]['distance']} km\n")
+                        f.write(f"LLA: {sat_info[sat]['lla']}\n")
+                        f.write(f"Velocity: {sat_info[sat]['velocity']} km/s\n")
+                        f.write(f"Delay: {sat_info[sat]['delay']} ms\n")
+                        f.write("\n")
+
             for i in range(orbit_number):
                 for j in range(sat_number):
                     num_sat1 = i * sat_number + j
@@ -215,10 +266,9 @@ class Observer():
 
     def calculate_delay(self):
         path = self.configuration_file_path + "/" + self.file_path
-        sat_cbf = [
-        ]  # first dimension: time. second dimension: node. third dimension: xyz
-        sat_lla = [
-        ]  # first dimension: time. second dimension: node. third dimension: lla
+        sat_cbf = []  # first dimension: time. second dimension: node. third dimension: xyz
+        sat_lla = []  # first dimension: time. second dimension: node. third dimension: lla
+        sat_vel = []  # first dimension: time. second dimension: node. third dimension: velocity
         GS_cbf = []  # first dimension: node. second dimension: xyz
 
         if os.path.exists(path + '/delay') == True:
@@ -252,6 +302,7 @@ class Observer():
         duration = self.duration  # second
         result = [[] for i in range(duration)]  # LLA result
         lla_per_sec = [[] for i in range(duration)]  # LLA result
+        velocities_per_sec = [[] for i in range(duration)]  # velocity result
 
         for i in range(num_of_orbit):  # range(num_of_orbit)
             raan = i / num_of_orbit * 2 * np.pi
@@ -280,6 +331,15 @@ class Observer():
                               range(duration))  # [:4]:minute，[:5]:second
                 geocentric = sat.at(t_ts)
                 subpoint = wgs84.subpoint(geocentric)
+
+                # NOTE: for satellite features, we use velocity vectors from SGP4
+                # Extract velocities in ECI coordinates
+                # Get all velocities at once and compute norms
+                for t in range(duration):
+                    velocity = float(np.linalg.norm(geocentric.velocity.km_per_s[:, t]))
+                    velocities_per_sec[t].append(velocity)
+                
+
                 # list: [subpoint.latitude.degrees] [subpoint.longitude.degrees] [subpoint.elevation.km]
                 for t in range(duration):
                     lla = '%f,%f,%f\n' % (subpoint.latitude.degrees[t],
@@ -287,9 +347,9 @@ class Observer():
                                           subpoint.elevation.km[t])
                     result[t].append(lla)
                     lla = []
-                    lla.append(subpoint.latitude.degrees[t])
-                    lla.append(subpoint.longitude.degrees[t])
-                    lla.append(subpoint.elevation.km[t])
+                    lla.append(float(subpoint.latitude.degrees[t]))
+                    lla.append(float(subpoint.longitude.degrees[t]))
+                    lla.append(float(subpoint.elevation.km[t]))
                     lla_per_sec[t].append(lla)
 
         for t in range(duration):
@@ -299,7 +359,7 @@ class Observer():
             cbf_per_sec = self.to_cbf(lla_per_sec[t], num_of_sat)
             sat_cbf.append(cbf_per_sec)
             sat_lla.append(lla_per_sec[t])
-
+            sat_vel.append(velocities_per_sec[t])
         if len(self.GS_lat_long) != 0:
             GS_cbf = self.to_cbf(self.GS_lat_long, len(self.GS_lat_long))
 
@@ -310,7 +370,7 @@ class Observer():
                                  self.sat_number * self.orbit_number,
                                  self.orbit_number, self.sat_number,
                                  self.duration, self.GS_lat_long, sat_lla,
-                                 bound_dis, alpha, self.antenna_number, path)
+                                 bound_dis, alpha, self.antenna_number, path, sat_vel)
         self.matrix_to_change(self.duration, self.orbit_number,
                               self.sat_number, path, self.GS_lat_long)
 
