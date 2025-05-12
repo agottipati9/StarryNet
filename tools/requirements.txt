@@ -7,3 +7,5 @@ skyfield
 sgp4 
 paramiko
 pandas
+matplotlib
+cartopy
