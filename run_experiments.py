@@ -288,6 +288,9 @@ def copy_satellite_files(config, output_dir, experiment_id):
         shutil.copytree(f"{folder}/delay", f"{output_dir}/delay")
     # copy the config file to output directory
     shutil.copy(f"/opt/home_dir/StarryNet/config.json", f"{output_dir}/config.json")
+    # When collecting data, we modify the queue size in paced_sender.cc
+    if os.path.exists(f"/opt/home_dir/outputs/queue_size.txt"):
+        shutil.copy(f"/opt/home_dir/outputs/queue_size.txt", f"{output_dir}/queue_size.txt")
 
 def run_command(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
