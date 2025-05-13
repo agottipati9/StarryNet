@@ -48,7 +48,8 @@ BASE_CONFIG = {
   "Inter-AS routing": "BGP",     # Keep constant unless testing routing protocols
   "Link policy": "LeastDelay", # Keep constant unless testing link policies
   "Handover policy": "instant handover",
-  "multi-machine (\"0\" for no, \"1\" for yes)": 0
+  "multi-machine (\"0\" for no, \"1\" for yes)": 0,
+  # "tle_file_path": "/opt/home_dir/StarryNet/tle/Starlink_May_2025.tle"
 }
 
 # Define Scenario IDs (adjust as needed)

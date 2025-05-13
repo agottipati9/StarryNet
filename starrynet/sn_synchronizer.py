@@ -23,6 +23,7 @@ class StarryNet():
         self.orbit_number = sn_args.orbit_number
         self.sat_number = sn_args.sat_number
         self.GS_num = sn_args.GS_num
+        self.tle_file_path = sn_args.tle_file_path
         # Validate GS_num matches GS_lat_long length
         if self.GS_num != len(GS_lat_long):
             raise ValueError(f"GS_num ({self.GS_num}) does not match number of ground stations in GS_lat_long ({len(GS_lat_long)})")
@@ -60,7 +61,7 @@ class StarryNet():
                                  self.duration, self.antenna_number,
                                  GS_lat_long, self.antenna_inclination,
                                  self.intra_routing, self.hello_interval,
-                                 self.AS)
+                                 self.AS, self.tle_file_path)
         self.docker_service_name = 'constellation-test'
         self.isl_idx = 0
         self.ISL_hub = 'ISL_hub'

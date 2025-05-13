@@ -19,7 +19,7 @@ class Observer():
     def __init__(self, file_path, configuration_file_path, inclination,
                  satellite_altitude, orbit_number, sat_number, duration,
                  antenna_number, GS_lat_long, antenna_inclination,
-                 intra_routing, hello_interval, AS):
+                 intra_routing, hello_interval, AS, tle_file_path):
         self.file_path = file_path
         self.configuration_file_path = configuration_file_path
         self.inclination = inclination
@@ -33,7 +33,7 @@ class Observer():
         self.intra_routing = intra_routing
         self.hello_interval = hello_interval
         self.AS = AS
-
+        self.tle_file_path = tle_file_path
     def access_P_L_shortest(self, sat_cbf, GS_cbf, GS_num, sat_num,
                             orbit_number, sat_number, duration, fac_ll,
                             sat_lla, bound_dis, alpha, antenna_num, path, sat_vel):
@@ -287,70 +287,109 @@ class Observer():
         since = datetime(1949, 12, 31, 0, 0, 0)
         start = datetime(2020, 1, 1, 0, 0, 0)
         epoch = (start - since).days
-        inclination = self.inclination * 2 * np.pi / 360
-        GM = 3.9860044e14
-        R = 6371393
-        altitude = self.satellite_altitude * 1000
-        mean_motion = np.sqrt(GM / (R + altitude)**3) * 60
-        num_of_orbit = self.orbit_number
-        sat_per_orbit = self.sat_number
-        num_of_sat = num_of_orbit * sat_per_orbit
-        F = 18
-        bound_dis = self.calculate_bound(
-            self.antenna_inclination, self.satellite_altitude) * 29.5 / 17.31
-
         duration = self.duration  # second
         result = [[] for i in range(duration)]  # LLA result
         lla_per_sec = [[] for i in range(duration)]  # LLA result
         velocities_per_sec = [[] for i in range(duration)]  # velocity result
+        bound_dis = self.calculate_bound(self.antenna_inclination, self.satellite_altitude) * 29.5 / 17.31
+        alpha = np.degrees(
+        np.arccos(6371 / (6371 + self.satellite_altitude) *
+                    np.cos(np.radians(self.antenna_inclination)))) - self.antenna_inclination
 
-        for i in range(num_of_orbit):  # range(num_of_orbit)
-            raan = i / num_of_orbit * 2 * np.pi
-            for j in range(sat_per_orbit):  # range(sat_per_orbit)
-                mean_anomaly = (j * 360 / sat_per_orbit + i * 360 * F /
-                                num_of_sat) % 360 * 2 * np.pi / 360
-                satrec = Satrec()
-                satrec.sgp4init(
-                    WGS84,  # gravity model
-                    'i',  # 'a' = old AFSPC mode, 'i' = improved mode
-                    i * sat_per_orbit + j,  # satnum: Satellite number
-                    epoch,  # epoch: days since 1949 December 31 00:00 UT
-                    2.8098e-05,  # bstar: drag coefficient (/earth radii)
-                    6.969196665e-13,  # ndot: ballistic coefficient (revs/day)
-                    0.0,  # nddot: second derivative of mean motion (revs/day^3)
-                    0.001,  # ecco: eccentricity
-                    0.0,  # argpo: argument of perigee (radians)
-                    inclination,  # inclo: inclination (radians)
-                    mean_anomaly,  # mo: mean anomaly (radians)
-                    mean_motion,  # no_kozai: mean motion (radians/minute)
-                    raan,  # nodeo: right ascension of ascending node (radians)
-                )
-                sat = EarthSatellite.from_satrec(satrec, ts)
-                cur = datetime(2022, 1, 1, 1, 0, 0)
-                t_ts = ts.utc(*cur.timetuple()[:5],
-                              range(duration))  # [:4]:minute，[:5]:second
+        # Use real TLE data
+        if self.tle_file_path:
+            print(f"Using TLE file: {self.tle_file_path}")
+            satellites = load.tle_file(self.tle_file_path)
+            num_of_orbit = self.orbit_number
+            sat_per_orbit = self.sat_number
+            num_of_sat = num_of_orbit * sat_per_orbit
+            if len(satellites) < num_of_sat:
+                # NOTE: ideally, the number of satellites in the TLE file should be equal to the number of satellites in the simulation
+                # However, this is not always the case (hardware limitations), so we need to adjust the number of satellites or the TLE file
+                print(f"Error: TLE file contains less than {num_of_sat} satellites. Adjust the number of satellites or the TLE file.")
+                raise ValueError("TLE file contains less than the number of satellites in the simulation")
+            # Use TLE data to generate satellite positions
+            for i in range(num_of_sat):
+                sat = satellites[i]
+                cur = datetime(2025, 5, 12, 1, 0, 0)
+                t_ts = ts.utc(*cur.timetuple()[:5], range(duration))
                 geocentric = sat.at(t_ts)
                 subpoint = wgs84.subpoint(geocentric)
 
-                # NOTE: for satellite features, we use velocity vectors from SGP4
                 # Extract velocities in ECI coordinates
-                # Get all velocities at once and compute norms
                 for t in range(duration):
                     velocity = float(np.linalg.norm(geocentric.velocity.km_per_s[:, t]))
                     velocities_per_sec[t].append(velocity)
-                
 
-                # list: [subpoint.latitude.degrees] [subpoint.longitude.degrees] [subpoint.elevation.km]
+                # Get position data
                 for t in range(duration):
                     lla = '%f,%f,%f\n' % (subpoint.latitude.degrees[t],
-                                          subpoint.longitude.degrees[t],
-                                          subpoint.elevation.km[t])
+                                        subpoint.longitude.degrees[t],
+                                        subpoint.elevation.km[t])
                     result[t].append(lla)
                     lla = []
                     lla.append(float(subpoint.latitude.degrees[t]))
                     lla.append(float(subpoint.longitude.degrees[t]))
                     lla.append(float(subpoint.elevation.km[t]))
                     lla_per_sec[t].append(lla)
+        # Use SGP4 to generate satellite positions
+        else:
+            print("Using SGP4 to generate satellite positions")
+            GM = 3.9860044e14
+            R = 6371393
+            orbit_inclination = self.inclination * 2 * np.pi / 360
+            altitude = self.satellite_altitude * 1000
+            mean_motion = np.sqrt(GM / (R + altitude)**3) * 60
+            num_of_orbit = self.orbit_number
+            sat_per_orbit = self.sat_number
+            num_of_sat = num_of_orbit * sat_per_orbit
+            F = 18
+            for i in range(num_of_orbit):  # range(num_of_orbit)
+                raan = i / num_of_orbit * 2 * np.pi
+                for j in range(sat_per_orbit):  # range(sat_per_orbit)
+                    mean_anomaly = (j * 360 / sat_per_orbit + i * 360 * F /
+                                    num_of_sat) % 360 * 2 * np.pi / 360
+                    satrec = Satrec()
+                    satrec.sgp4init(
+                        WGS84,  # gravity model
+                        'i',  # 'a' = old AFSPC mode, 'i' = improved mode
+                        i * sat_per_orbit + j,  # satnum: Satellite number
+                        epoch,  # epoch: days since 1949 December 31 00:00 UT
+                        2.8098e-05,  # bstar: drag coefficient (/earth radii)
+                        6.969196665e-13,  # ndot: ballistic coefficient (revs/day)
+                        0.0,  # nddot: second derivative of mean motion (revs/day^3)
+                        0.001,  # ecco: eccentricity
+                        0.0,  # argpo: argument of perigee (radians)
+                        orbit_inclination,  # inclo: inclination (radians)
+                        mean_anomaly,  # mo: mean anomaly (radians)
+                        mean_motion,  # no_kozai: mean motion (radians/minute)
+                        raan,  # nodeo: right ascension of ascending node (radians)
+                    )
+                    sat = EarthSatellite.from_satrec(satrec, ts)
+                    cur = datetime(2022, 1, 1, 1, 0, 0)
+                    t_ts = ts.utc(*cur.timetuple()[:5],
+                                range(duration))  # [:4]:minute，[:5]:second
+                    geocentric = sat.at(t_ts)
+                    subpoint = wgs84.subpoint(geocentric)
+
+                    # NOTE: for satellite features, we use velocity vectors from SGP4
+                    # Extract velocities in ECI coordinates
+                    # Get all velocities at once and compute norms
+                    for t in range(duration):
+                        velocity = float(np.linalg.norm(geocentric.velocity.km_per_s[:, t]))
+                        velocities_per_sec[t].append(velocity)
+
+                    # list: [subpoint.latitude.degrees] [subpoint.longitude.degrees] [subpoint.elevation.km]
+                    for t in range(duration):
+                        lla = '%f,%f,%f\n' % (subpoint.latitude.degrees[t],
+                                            subpoint.longitude.degrees[t],
+                                            subpoint.elevation.km[t])
+                        result[t].append(lla)
+                        lla = []
+                        lla.append(float(subpoint.latitude.degrees[t]))
+                        lla.append(float(subpoint.longitude.degrees[t]))
+                        lla.append(float(subpoint.elevation.km[t]))
+                        lla_per_sec[t].append(lla)
 
         for t in range(duration):
             file = path + '/position/' + '%d.txt' % t
@@ -363,9 +402,6 @@ class Observer():
         if len(self.GS_lat_long) != 0:
             GS_cbf = self.to_cbf(self.GS_lat_long, len(self.GS_lat_long))
 
-        alpha = np.degrees(
-            np.arccos(6371 / (6371 + self.satellite_altitude) *
-                      np.cos(np.radians(inclination)))) - inclination
         self.access_P_L_shortest(sat_cbf, GS_cbf, len(self.GS_lat_long),
                                  self.sat_number * self.orbit_number,
                                  self.orbit_number, self.sat_number,

@@ -76,6 +76,7 @@ def sn_load_file(path, GS_lat_long):
     data['remote_machine_IP'] = table["remote_machine_IP"]
     data['remote_machine_username'] = table["remote_machine_username"]
     data['remote_machine_password'] = table["remote_machine_password"]
+    data['tle_file_path'] = table.get('tle_file_path', None)
 
     parser = argparse.ArgumentParser(description='manual to this script')
     parser.add_argument('--cons_name', type=str, default=data['cons_name'])
@@ -129,6 +130,9 @@ def sn_load_file(path, GS_lat_long):
     parser.add_argument('--remote_machine_password',
                         type=str,
                         default=data['remote_machine_password'])
+    parser.add_argument('--tle_file_path',
+                        type=str,
+                        default=data['tle_file_path'])
 
     parser.add_argument('--path',
                         '-p',
