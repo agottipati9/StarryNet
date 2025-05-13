@@ -14,7 +14,8 @@ class StarryNet():
                  configuration_file_path,
                  GS_lat_long,
                  hello_interval=10,
-                 AS=[]):
+                 AS=[], 
+                 add_maneuvers=False):
         # Initialize constellation information.
         sn_args = sn_load_file(configuration_file_path, GS_lat_long)
         self.name = sn_args.cons_name
@@ -61,7 +62,7 @@ class StarryNet():
                                  self.duration, self.antenna_number,
                                  GS_lat_long, self.antenna_inclination,
                                  self.intra_routing, self.hello_interval,
-                                 self.AS, self.tle_file_path)
+                                 self.AS, self.tle_file_path, add_maneuvers)
         self.docker_service_name = 'constellation-test'
         self.isl_idx = 0
         self.ISL_hub = 'ISL_hub'

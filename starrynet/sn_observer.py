@@ -19,7 +19,7 @@ class Observer():
     def __init__(self, file_path, configuration_file_path, inclination,
                  satellite_altitude, orbit_number, sat_number, duration,
                  antenna_number, GS_lat_long, antenna_inclination,
-                 intra_routing, hello_interval, AS, tle_file_path):
+                 intra_routing, hello_interval, AS, tle_file_path, add_maneuvers):
         self.file_path = file_path
         self.configuration_file_path = configuration_file_path
         self.inclination = inclination
@@ -34,6 +34,8 @@ class Observer():
         self.hello_interval = hello_interval
         self.AS = AS
         self.tle_file_path = tle_file_path
+        self.add_maneuvers = add_maneuvers
+
     def access_P_L_shortest(self, sat_cbf, GS_cbf, GS_num, sat_num,
                             orbit_number, sat_number, duration, fac_ll,
                             sat_lla, bound_dis, alpha, antenna_num, path, sat_vel):
@@ -292,9 +294,10 @@ class Observer():
         lla_per_sec = [[] for i in range(duration)]  # LLA result
         velocities_per_sec = [[] for i in range(duration)]  # velocity result
         bound_dis = self.calculate_bound(self.antenna_inclination, self.satellite_altitude) * 29.5 / 17.31
+        orbit_inclination = self.inclination * 2 * np.pi / 360
         alpha = np.degrees(
         np.arccos(6371 / (6371 + self.satellite_altitude) *
-                    np.cos(np.radians(self.antenna_inclination)))) - self.antenna_inclination
+                    np.cos(np.radians(orbit_inclination)))) - orbit_inclination
 
         # Use real TLE data
         if self.tle_file_path:
@@ -337,18 +340,38 @@ class Observer():
             print("Using SGP4 to generate satellite positions")
             GM = 3.9860044e14
             R = 6371393
-            orbit_inclination = self.inclination * 2 * np.pi / 360
             altitude = self.satellite_altitude * 1000
-            mean_motion = np.sqrt(GM / (R + altitude)**3) * 60
             num_of_orbit = self.orbit_number
             sat_per_orbit = self.sat_number
             num_of_sat = num_of_orbit * sat_per_orbit
+            p_maneuver = np.random.uniform(0.05, 0.15)
             F = 18
             for i in range(num_of_orbit):  # range(num_of_orbit)
-                raan = i / num_of_orbit * 2 * np.pi
                 for j in range(sat_per_orbit):  # range(sat_per_orbit)
+                    # TODO: if add_maneuvers is set, we need to perturb the motion of the satellite more than what we would do for domain randomization
+                    raan = i / num_of_orbit * 2 * np.pi
                     mean_anomaly = (j * 360 / sat_per_orbit + i * 360 * F /
                                     num_of_sat) % 360 * 2 * np.pi / 360
+                    do_maneuver = np.random.uniform(0, 1) < p_maneuver
+                    # domain randomization
+                    if self.add_maneuvers and do_maneuver:
+                        progress = np.random.uniform(0.2, 1.0)  # 20-100% through maneuver
+                        perturbed_params = add_maneuver_perturbations(
+                            base_satellite_altitude_km=altitude,
+                            base_mean_anomaly_deg=mean_anomaly,
+                            base_raan_rad=raan,
+                            maneuver_progress=progress,
+                        )
+                    else:
+                        perturbed_params = add_noise_to_sgp4_params(
+                            base_satellite_altitude_km=altitude,
+                            base_raan_rad=raan,
+                            base_mean_anomaly_deg=mean_anomaly,
+                        )
+                    altitude = perturbed_params['altitude_km']
+                    raan = perturbed_params['raan_rad']
+                    mean_anomaly = perturbed_params['mean_anomaly_deg']
+                    mean_motion = np.sqrt(GM / (R + altitude)**3) * 60
                     satrec = Satrec()
                     satrec.sgp4init(
                         WGS84,  # gravity model
@@ -619,3 +642,90 @@ class Observer():
                                 len(self.GS_lat_long), ID, Q, remote_ftp)
 
         return error
+
+
+def add_noise_to_sgp4_params(
+    # Base values for the satellite/orbit
+    base_satellite_altitude_km: float,
+    base_mean_anomaly_deg: float,
+    base_raan_rad: float, # Nominal RAAN for the current plane
+    # Perturbation magnitudes/settings
+    altitude_min_km: float = 550.0,
+    altitude_perturbation_range_km: float = 5.0,
+    mean_anomaly_perturbation_range_deg: float = 2.0,
+    raan_perturbation_range_deg: float = 5.0,
+    ):
+    """
+    Perturbs SGP4 orbital elements for domain randomization.
+
+    Args:
+        base_satellite_altitude_km: Nominal altitude for mean motion calculation.
+        base_raan_rad: Nominal Right Ascension of Ascending Node in radians for the plane.
+        base_mean_anomaly_deg: Nominal Mean Anomaly in degrees for the satellite.
+        altitude_perturbation_range_km: Max +/- random value added to altitude.
+        raan_perturbation_range_deg: Max +/- random value added to RAAN.
+        mean_anomaly_perturbation_range_deg: Max +/- random value added to Mean Anomaly.
+
+    Returns:
+        A dictionary containing the perturbed SGP4 elements:
+        'altitude_km', 'raan_rad', 'mean_anomaly_deg'
+    """
+    perturbed_params = {}
+    perturbed_params['altitude_km'] = base_satellite_altitude_km + np.random.uniform(-altitude_perturbation_range_km, altitude_perturbation_range_km)
+    perturbed_params['altitude_km'] = max(perturbed_params['altitude_km'], altitude_min_km)
+    raan_perturbation_range_rad = np.radians(np.random.uniform(-raan_perturbation_range_deg, raan_perturbation_range_deg))
+    perturbed_params['raan_rad'] = (base_raan_rad + raan_perturbation_range_rad) % (2 * np.pi)
+    ma_perturb = np.random.uniform(-mean_anomaly_perturbation_range_deg, mean_anomaly_perturbation_range_deg)
+    perturbed_mean_anomaly_deg = base_mean_anomaly_deg + ma_perturb
+    # Wrap Mean Anomaly to [0, 360) degrees
+    perturbed_params['mean_anomaly_deg'] = perturbed_mean_anomaly_deg % 360.0
+    if perturbed_params['mean_anomaly_deg'] < 0: # Ensure positive if modulo gives negative
+        perturbed_params['mean_anomaly_deg'] += 360.0
+    return perturbed_params
+
+
+def add_maneuver_perturbations(
+    base_satellite_altitude_km: float,
+    base_mean_anomaly_deg: float,
+    base_raan_rad: float,
+    maneuver_type: str = 'random',  # e.g., 'altitude_change', 'plane_change', 'phasing'
+    maneuver_magnitude: float = 20.0,  # magnitude of the maneuver
+    raan_maneuver_magnitude: float = 10.0,
+    mean_anomaly_maneuver_magnitude: float = 2.0,
+    min_altitude_km: float = 550.0,
+    maneuver_progress: float = 0.5,
+):
+    """
+    Perturbs orbital elements to simulate specific types of maneuvers.
+    """
+    perturbed_params = {}
+
+    # Select random maneuver type if not specified
+    if maneuver_type == 'random':
+        maneuver_type = np.random.choice(['altitude_change', 'plane_change', 'phasing'])
+
+    # Scale the maneuver magnitude based on the maneuver progress
+    maneuver_magnitude = maneuver_magnitude * maneuver_progress
+    raan_maneuver_magnitude = raan_maneuver_magnitude * maneuver_progress
+    mean_anomaly_maneuver_magnitude = mean_anomaly_maneuver_magnitude * maneuver_progress
+
+    if maneuver_type == 'altitude_change':
+        # Larger altitude changes for orbit raising/lowering
+        perturbed_params['altitude_km'] = base_satellite_altitude_km + maneuver_magnitude
+        perturbed_params['altitude_km'] = max(perturbed_params['altitude_km'], min_altitude_km)
+        # Smaller changes to other parameters
+        perturbed_params['mean_anomaly_deg'] = base_mean_anomaly_deg + np.random.uniform(-1, 1)
+        perturbed_params['raan_rad'] = base_raan_rad + np.radians(np.random.uniform(-0.5, 0.5))
+    elif maneuver_type == 'plane_change':
+        # Larger RAAN changes for plane changes
+        perturbed_params['raan_rad'] = base_raan_rad + np.radians(raan_maneuver_magnitude)
+        # Smaller changes to other parameters
+        perturbed_params['altitude_km'] = base_satellite_altitude_km + np.random.uniform(-2, 2)
+        perturbed_params['mean_anomaly_deg'] = base_mean_anomaly_deg + np.random.uniform(-1, 1)
+    elif maneuver_type == 'phasing':
+        # Larger mean anomaly changes for phasing maneuvers
+        perturbed_params['mean_anomaly_deg'] = base_mean_anomaly_deg + mean_anomaly_maneuver_magnitude
+        # Smaller changes to other parameters
+        perturbed_params['altitude_km'] = base_satellite_altitude_km + np.random.uniform(-2, 2)
+        perturbed_params['raan_rad'] = base_raan_rad + np.radians(np.random.uniform(-0.5, 0.5))
+    return perturbed_params

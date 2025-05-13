@@ -58,6 +58,7 @@ SCENARIOS = {
     2: "Typical", 
     3: "Maneuvers",
     4: "Churn",
+    5: "RandomLoss"
 }
 
 def set_call_duration(n_nodes):
@@ -161,6 +162,18 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
+    elif scenario_id == 5: # Random Loss Scenarios
+        # Note: Random loss requires external simulation/injection.
+        # This config sets the density context (~80 sats).
+        config["Altitude (km)"] = 550
+        config["antenna_inclination_angle"] = 25
+        config["# of orbit"] = 10
+        config["# of satellites"] = 8 # Lower density (80 total)
+        config["satellite link loss (\"X\"% )"] = 1
+        config["sat-ground loss (\"X\"% )"] = 1
+        config["satellite link bandwidth (\"X\" Gbps)"] = 1
+        config["sat-ground bandwidth (\"X\" Gbps)"] = 1
+
     # Ensure total satellites doesn't exceed 150
     total_sats = config["# of orbit"] * config["# of satellites"]
     if total_sats > 150:
@@ -221,7 +234,8 @@ def run_experiment(args, total_duration):
     hello_interval = 10  # hello_interval(s) in OSPF. 1-200 are supported.
 
     print('Initializing StarryNet...')
-    sn = StarryNet(args.outfile, GS_lat_long, hello_interval, AS)
+    add_maneuvers = args.exp == 3
+    sn = StarryNet(args.outfile, GS_lat_long, hello_interval, AS, add_maneuvers)
     sn.stop_emulation() # stop emulation before creating nodes
     sn.create_nodes()
     sn.create_links()
@@ -232,14 +246,14 @@ def run_experiment(args, total_duration):
 
     # Set damage parameters based on experiment scenario
     call_offset = 10
-    if args.exp == 3:  # Add maneuvers to LEO scenarios
-        # Model maneuvers as a Poisson process
-        maneuver_rate = np.random.uniform(0.02, 0.05) # 1/50 to 1/20 events/sec
-        num_maneuvers = np.random.poisson(maneuver_rate * (TOTAL_EMULATION_TIME - call_offset))  # Number of maneuvers
-        maneuver_times = np.sort(np.random.uniform(call_offset, TOTAL_EMULATION_TIME, num_maneuvers))  # Random times
-        for t in maneuver_times:
+    if args.exp == 5:  # Add Random Loss to LEO scenarios
+        # Model random loss as a Poisson process
+        loss_rate = np.random.uniform(0.02, 0.05) # 1/50 to 1/20 events/sec
+        num_losses = np.random.poisson(loss_rate * (TOTAL_EMULATION_TIME - call_offset))  # Number of losses
+        loss_times = np.sort(np.random.uniform(call_offset, TOTAL_EMULATION_TIME, num_losses))  # Random times
+        for t in loss_times:
             ratio = np.random.uniform(0.05, 0.1) # 5-10% 
-            sn.set_damage(ratio, int(t))  # Apply maneuver at time t
+            sn.set_damage(ratio, int(t))  # Apply loss at time t
             recovery_time = np.random.randint(5, 10) # Recovery time 5-10s
             sn.set_recovery(int(t) + recovery_time)  # Restore network
 
