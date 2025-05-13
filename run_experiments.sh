@@ -1,7 +1,7 @@
 #! /bin/bash
 
-START_EXP=1
-END_EXP=4
+START_EXP=2
+END_EXP=5
 N_TRIALS=10
 
 for exp in $(seq $START_EXP $END_EXP); do

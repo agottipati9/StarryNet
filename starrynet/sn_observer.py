@@ -287,7 +287,7 @@ class Observer():
 
         ts = load.timescale()
         since = datetime(1949, 12, 31, 0, 0, 0)
-        start = datetime(2020, 1, 1, 0, 0, 0)
+        start = datetime(2022, 1, 1, 0, 0, 0)
         epoch = (start - since).days
         duration = self.duration  # second
         result = [[] for i in range(duration)]  # LLA result
@@ -348,7 +348,6 @@ class Observer():
             F = 18
             for i in range(num_of_orbit):  # range(num_of_orbit)
                 for j in range(sat_per_orbit):  # range(sat_per_orbit)
-                    # TODO: if add_maneuvers is set, we need to perturb the motion of the satellite more than what we would do for domain randomization
                     raan = i / num_of_orbit * 2 * np.pi
                     mean_anomaly = (j * 360 / sat_per_orbit + i * 360 * F /
                                     num_of_sat) % 360 * 2 * np.pi / 360
@@ -357,18 +356,18 @@ class Observer():
                     if self.add_maneuvers and do_maneuver:
                         progress = np.random.uniform(0.2, 1.0)  # 20-100% through maneuver
                         perturbed_params = add_maneuver_perturbations(
-                            base_satellite_altitude_km=altitude,
+                            base_satellite_altitude_km=self.satellite_altitude,
                             base_mean_anomaly_deg=mean_anomaly,
                             base_raan_rad=raan,
                             maneuver_progress=progress,
                         )
                     else:
                         perturbed_params = add_noise_to_sgp4_params(
-                            base_satellite_altitude_km=altitude,
+                            base_satellite_altitude_km=self.satellite_altitude,
                             base_raan_rad=raan,
                             base_mean_anomaly_deg=mean_anomaly,
                         )
-                    altitude = perturbed_params['altitude_km']
+                    altitude = perturbed_params['altitude_km'] * 1000
                     raan = perturbed_params['raan_rad']
                     mean_anomaly = perturbed_params['mean_anomaly_deg']
                     mean_motion = np.sqrt(GM / (R + altitude)**3) * 60
