@@ -121,9 +121,10 @@ class ClassificationHead(nn.Module):
     def forward(self, x):
         # x.shape == [batch, num_tokens+1, emb_size]
         cls_token = x[:, 0, :]
+        other_tokens = x[:, 1:, :]
         out = self.norm(cls_token)
         logits = self.fc(out)
-        return logits
+        return logits, other_tokens # return logits and other tokens for future use
 
 
 class ViT(nn.Sequential):

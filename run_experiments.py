@@ -241,12 +241,10 @@ def run_experiment(args, total_duration):
     sn = StarryNet(args.outfile, GS_lat_long, hello_interval, AS, add_maneuvers)
     model = load_queue_model()
     sn.set_queue_size(model, args.use_default_queue)
-    exit(0)
     sn.stop_emulation() # stop emulation before creating nodes
     sn.create_nodes()
     sn.create_links()
     sn.run_routing_deamon()
-    exit(0)
 
     print('Creating RTC nodes...')
     sn.create_rtc_nodes()
@@ -278,7 +276,10 @@ def run_experiment(args, total_duration):
     # parse output logs
     print("Parsing output logs...")
     # save results
-    output_dir = f'/mydata/gcc_baselines/{args.experiment_id}'
+    if args.use_default_queue:
+        output_dir = f'/mydata/gcc_baselines_default_queue/{args.experiment_id}'
+    else:
+        output_dir = f'/mydata/gcc_baselines/{args.experiment_id}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     copy_satellite_files(config, output_dir, args.experiment_id)

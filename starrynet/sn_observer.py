@@ -443,8 +443,10 @@ class Observer():
             sat_features = self.parse_satellite_features(path)
             queue_sizes = [600, 900] 
             with torch.no_grad():
-                prediction = model(sat_features).argmax(dim=1).item()
-            # TODO: we need to write model features to disk for future use
+                prediction, other_tokens = model(sat_features)
+                prediction = prediction.argmax(dim=1).item()
+                other_tokens = other_tokens.reshape(125, -1)
+            torch.save(other_tokens, f"{path}/model_features.pt")
             queue_size = queue_sizes[prediction]
             print(f"Queue size: {queue_size}")
         os.system(f"python {queue_script} --queue_size {queue_size}")
