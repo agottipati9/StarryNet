@@ -292,7 +292,8 @@ def load_queue_model():
         depth = 6,
         n_classes = 2,
     )
-    model.load_state_dict(torch.load('/opt/home_dir/StarryNet/queue_model.pth', map_location=torch.device('cpu')))
+    checkpoint = torch.load('/opt/home_dir/StarryNet/models/queue_model.tar', map_location=torch.device('cpu'))
+    model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     return model
 

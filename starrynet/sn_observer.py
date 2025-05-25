@@ -435,7 +435,7 @@ class Observer():
                               self.sat_number, path, self.GS_lat_long)
 
     # TODO: use model to set queue size in AlphaRTC
-    def set_queue_size(self, model, queue_script='/opt/home_dir/StarryNet/adjust_queue_size.py'):
+    def set_queue_size(self, model, queue_script='/opt/home_dir/StarryNet/adjust_alphartc_queue.py'):
         path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
         sat_features = self.parse_satellite_features(path)
         queue_sizes = [600, 900] 
