@@ -434,20 +434,22 @@ class Observer():
         self.matrix_to_change(self.duration, self.orbit_number,
                               self.sat_number, path, self.GS_lat_long)
 
-    # TODO: use model to set queue size in AlphaRTC
-    def set_queue_size(self, model, queue_script='/opt/home_dir/StarryNet/adjust_alphartc_queue.py'):
-        path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
-        sat_features = self.parse_satellite_features(path)
-        queue_sizes = [600, 900] 
-        with torch.no_grad():
-            prediction = model(sat_features).argmax(dim=1).item()
-        # TODO: we need to write model features to disk for future use
-        queue_size = queue_sizes[prediction]
-        print(f"Queue size: {queue_size}")
+    def set_queue_size(self, model, use_default_queue=False, queue_script='/opt/home_dir/StarryNet/adjust_alphartc_queue.py'):
+        if use_default_queue:
+            queue_size = 2000
+            print(f"Using default queue size: {queue_size}")
+        else:
+            path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
+            sat_features = self.parse_satellite_features(path)
+            queue_sizes = [600, 900] 
+            with torch.no_grad():
+                prediction = model(sat_features).argmax(dim=1).item()
+            # TODO: we need to write model features to disk for future use
+            queue_size = queue_sizes[prediction]
+            print(f"Queue size: {queue_size}")
         os.system(f"python {queue_script} --queue_size {queue_size}")
 
     def parse_satellite_features(self, folder):
-        # TODO: parse all 125 x 2 files for both ground stations in the satellite_features subfolder
         gs_ids = ['gs_0'] #, 'gs_1']
         sat_features = {}
         for gs_id in gs_ids:

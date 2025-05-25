@@ -240,7 +240,7 @@ def run_experiment(args, total_duration):
     add_maneuvers = args.exp == 3
     sn = StarryNet(args.outfile, GS_lat_long, hello_interval, AS, add_maneuvers)
     model = load_queue_model()
-    sn.set_queue_size(model)
+    sn.set_queue_size(model, args.use_default_queue)
     exit(0)
     sn.stop_emulation() # stop emulation before creating nodes
     sn.create_nodes()
@@ -434,6 +434,8 @@ def main():
                         help=f"Experiment scenario ID ({', '.join(map(str, SCENARIOS.keys()))})")
     parser.add_argument("--outfile", type=str, default="/opt/home_dir/StarryNet/config.json",
                         help="File path to save the JSON config.")
+    parser.add_argument("--use_default_queue", action="store_true",
+                        help="Use default queue size (2000) instead of model prediction.")
 
     args = parser.parse_args()
 
