@@ -17,6 +17,9 @@ import os
 from datetime import datetime
 import re
 import glob
+import torch
+from starrynet.sn_queue_model import ViT
+
 TOTAL_EMULATION_TIME = 125
 
 # Define the base configuration using parameters from your example
@@ -236,10 +239,14 @@ def run_experiment(args, total_duration):
     print('Initializing StarryNet...')
     add_maneuvers = args.exp == 3
     sn = StarryNet(args.outfile, GS_lat_long, hello_interval, AS, add_maneuvers)
+    model = load_queue_model()
+    sn.set_queue_size(model)
+    exit(0)
     sn.stop_emulation() # stop emulation before creating nodes
     sn.create_nodes()
     sn.create_links()
     sn.run_routing_deamon()
+    exit(0)
 
     print('Creating RTC nodes...')
     sn.create_rtc_nodes()
@@ -277,6 +284,17 @@ def run_experiment(args, total_duration):
     copy_satellite_files(config, output_dir, args.experiment_id)
     results = parse_output_logs(output_dir, args.experiment_id)
 
+
+def load_queue_model():
+    model = ViT(num_states = 125,
+        state_dim = 35,
+        emb_size = 64,
+        depth = 6,
+        n_classes = 2,
+    )
+    model.load_state_dict(torch.load('/opt/home_dir/StarryNet/queue_model.pth', map_location=torch.device('cpu')))
+    model.eval()
+    return model
 
 def copy_satellite_files(config, output_dir, experiment_id):
     glob_pattern = f"/opt/home_dir/StarryNet/{config['Name']}-{config['# of orbit']}-{config['# of satellites']}*"

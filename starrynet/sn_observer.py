@@ -5,6 +5,8 @@ from skyfield.api import load, wgs84, EarthSatellite
 from datetime import datetime
 import numpy as np
 import os
+import torch
+from glob import glob
 
 from starrynet.sn_utils import *
 
@@ -117,7 +119,7 @@ class Observer():
                             }
                         })
                 # Log the information
-                log_file = f"{satellite_feature_dir}/gs_{i}_time_{cur_time}.txt"
+                log_file = f"{satellite_feature_dir}/gs_{i}_time_{cur_time:03d}.txt"
                 with open(log_file, 'w') as f:
                     f.write(f"Ground Station {i} at time {cur_time}\n")
                     f.write(f"GS Location: {fac_ll[i]}\n\n")
@@ -432,6 +434,103 @@ class Observer():
         self.matrix_to_change(self.duration, self.orbit_number,
                               self.sat_number, path, self.GS_lat_long)
 
+    # TODO: use model to set queue size in AlphaRTC
+    def set_queue_size(self, model, queue_script='/opt/home_dir/StarryNet/adjust_queue_size.py'):
+        path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
+        sat_features = self.parse_satellite_features(path)
+        queue_sizes = [600, 900] 
+        with torch.no_grad():
+            prediction = model(sat_features).argmax(dim=1).item()
+        # TODO: we need to write model features to disk for future use
+        queue_size = queue_sizes[prediction]
+        print(f"Queue size: {queue_size}")
+        os.system(f"python {queue_script} --queue_size {queue_size}")
+
+    def parse_satellite_features(self, folder):
+        # TODO: parse all 125 x 2 files for both ground stations in the satellite_features subfolder
+        gs_ids = ['gs_0'] #, 'gs_1']
+        sat_features = {}
+        for gs_id in gs_ids:
+            sat_features[gs_id] = torch.zeros(125, 35)
+            features_files = glob(os.path.join(folder, 'satellite_features', f'{gs_id}*.txt'))
+            features_files.sort()  # ensure files are in chronological order
+            for time_step, features_file in enumerate(features_files):
+                with open(features_file, 'r') as f:
+                    lines = f.readlines()
+                    # Skip header lines
+                    satellite_features = []
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith('LLA:'):  # NOTE: lets skip GS Location for now
+                            if '[' not in line:
+                                coords = [-1.0, -1.0, -1.0]
+                            else:
+                                line_arr = line.split(':')[1].strip().strip('[]').split(',')
+                                coords = [float(coord) for coord in line_arr]
+                            satellite_features.extend(coords)
+                        elif line.startswith('ID:'):
+                            satellite_id = int(line.split(':')[1].strip())
+                            satellite_features.append(satellite_id)
+                        elif line.startswith('Distance:') or line.startswith('Velocity:') or line.startswith('Delay:'):
+                            value = float(line.split(' ')[1].strip())
+                            satellite_features.append(value)
+                    sat_features[gs_id][time_step] = torch.tensor(satellite_features)
+        sat_features = torch.stack(list(sat_features.values()), dim=0)
+        sat_features = self.normalize_observations(sat_features)
+        sat_features = sat_features.reshape(1, 125, 35)
+        return sat_features
+
+    def normalize_observations(self, observations):
+        # observations is (N x 125 x 35) tensor
+        feature_columns = {
+            'sat_id': [0, 7, 14, 21, 28],
+            'distance': [1, 8, 15, 22, 29],
+            'longitude': [2, 9, 16, 23, 30],
+            'latitude': [3, 10, 17, 24, 31],
+            'altitude': [4, 11, 18, 25, 32],
+            'velocity': [5, 12, 19, 26, 33],
+            'delay': [6, 13, 20, 27, 34]
+        }
+        for feature_name, columns in feature_columns.items():
+            # normalize each column
+            for i in columns:
+                feature = observations[:, :, i]
+                observations[:, :, i] = self.normalize_feature(feature, feature_type=feature_name)
+        return observations
+
+    def normalize_feature(self,feature, feature_type='sat_id'):
+        if feature_type == 'sat_id':
+            feature = feature / 100  # 0-100 (all positive IDs are valid)
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'distance':
+            min_feature = 538.0  # (all negative values are invalid)
+            max_feature = 1915.0
+            feature = (feature - min_feature) / (max_feature - min_feature)
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'altitude':
+            min_feature = 536.0 # (all negative values are invalid)
+            max_feature = 581.0
+            feature = (feature - min_feature) / (max_feature - min_feature)
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'velocity': 
+            min_feature = 7.5  # (all negative values are invalid)
+            max_feature = 7.6
+            feature = (feature - min_feature) / (max_feature - min_feature)
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'delay': 
+            min_feature = 3.0  # (all negative values are invalid)
+            max_feature = 11.0
+            feature = (feature - min_feature) / (max_feature - min_feature)
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'longitude':
+            feature = feature / 180  # -180 to 180
+            return torch.clamp(feature, -1, 1)
+        elif feature_type == 'latitude':
+            feature = feature / 90  # -90 to 90
+            return torch.clamp(feature, -1, 1)
+        else:
+            raise ValueError(f"Invalid feature type: {feature_type}")
+  
     def compute_conf(self, sat_node_number, interval, num1, num2, ID, Q,
                      num_backbone, matrix):
         Q.append(
