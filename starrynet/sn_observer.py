@@ -440,7 +440,7 @@ class Observer():
             print(f"Using default queue size: {queue_size}")
         else:
             path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
-            sat_features = self.parse_satellite_features(path)
+            sat_features = self.get_satellite_features(path)
             queue_sizes = [600, 900] 
             with torch.no_grad():
                 prediction, other_tokens = model(sat_features)
@@ -479,10 +479,37 @@ class Observer():
                             value = float(line.split(' ')[1].strip())
                             satellite_features.append(value)
                     sat_features[gs_id][time_step] = torch.tensor(satellite_features)
+        return sat_features
+
+    def get_satellite_features(self, folder):
+        # get satellite features
+        sat_features = self.parse_satellite_features(folder)
+        # Add handover features to the last dimension of sat_features
+        for gs_id in sat_features:
+            total_handovers_per_call, handover_next_ts = self.compute_number_handover_features(sat_features[gs_id])
+            sat_features[gs_id] = torch.cat([sat_features[gs_id], handover_next_ts, total_handovers_per_call], dim=1)
         sat_features = torch.stack(list(sat_features.values()), dim=0)
         sat_features = self.normalize_observations(sat_features)
-        sat_features = sat_features.reshape(1, 125, 35)
+        sat_features = sat_features.reshape(1, 125, -1)
         return sat_features
+
+    def compute_number_handover_features(self, sat_features):
+        """Assumes that the satellite features are in chronological order.
+        Computes the total number of estimated handovers for a call, 
+        computes whether a handover will occur at the next time step."""
+        serving_sat_id_idx = 0
+        n_time_steps = sat_features.shape[0]
+        total_handovers_per_call = torch.zeros((n_time_steps, 1))
+        for t in range(n_time_steps - 1):
+            total_handovers_for_ts = (sat_features[t, serving_sat_id_idx] != sat_features[t+1, serving_sat_id_idx]).long()
+            total_handovers_per_call[t] = total_handovers_for_ts
+        # whether a handover will occur at the next time step
+        handover_next_ts = total_handovers_per_call[1:] > 0
+        handover_next_ts = torch.cat([torch.zeros((1, 1)), handover_next_ts], dim=0)  # shape = time steps, 1
+        # total number of handovers per call (shape = calls, time steps)
+        total_handovers_per_call = total_handovers_per_call.sum(dim=0)
+        total_handovers_per_call = total_handovers_per_call.unsqueeze(1).repeat(1, n_time_steps).reshape(n_time_steps, 1)
+        return total_handovers_per_call, handover_next_ts
 
     def normalize_observations(self, observations):
         # observations is (N x 125 x 35) tensor
@@ -493,7 +520,9 @@ class Observer():
             'latitude': [3, 10, 17, 24, 31],
             'altitude': [4, 11, 18, 25, 32],
             'velocity': [5, 12, 19, 26, 33],
-            'delay': [6, 13, 20, 27, 34]
+            'delay': [6, 13, 20, 27, 34],
+            'handover_next_ts': [35],
+            'total_handovers_per_call': [36]
         }
         for feature_name, columns in feature_columns.items():
             # normalize each column
@@ -532,6 +561,11 @@ class Observer():
         elif feature_type == 'latitude':
             feature = feature / 90  # -90 to 90
             return torch.clamp(feature, -1, 1)
+        elif feature_type == 'handover_next_ts':
+            return torch.clamp(feature, 0, 1) # boolean feature
+        elif feature_type == 'total_handovers_per_call':
+            feature = feature / 3.0 # normalize to 0-1
+            return torch.clamp(feature, 0, 1)
         else:
             raise ValueError(f"Invalid feature type: {feature_type}")
   
