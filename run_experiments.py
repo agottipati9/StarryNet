@@ -58,9 +58,9 @@ BASE_CONFIG = {
 # Define Scenario IDs (adjust as needed)
 SCENARIOS = {
     1: "Stable",
-    2: "Typical", 
+    2: "Churn",
     3: "Maneuvers",
-    4: "Churn",
+    4: "Typical",
     5: "RandomLoss"
 }
 
@@ -132,11 +132,10 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
-    # --- Typical LEO with low churn (100 sats Based on 10 fixed orbits)
-    elif scenario_id == 2:
+    elif scenario_id == 2: # Frequent ISL Churn
         config["Altitude (km)"] = 550 # Standard LEO altitude
         config["antenna_inclination_angle"] = 25 # Standard angle
-        config["# of orbit"] = 10
+        config["# of orbit"] = 10 # Higher density = more churn
         config["# of satellites"] = 10 # Moderate density (100 total)
         config["satellite link loss (\"X\"% )"] = 1 # Standard loss
         config["sat-ground loss (\"X\"% )"] = 1    # Standard loss
@@ -155,13 +154,14 @@ def generate_config(scenario_id):
         config["satellite link bandwidth (\"X\" Gbps)"] = 1
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1
 
-    elif scenario_id == 4: # Frequent ISL Churn
+    # --- Typical LEO with low churn (100 sats Based on 10 fixed orbits)
+    elif scenario_id == 4:
         config["Altitude (km)"] = 550 # Standard altitude
         config["antenna_inclination_angle"] = 25 # Standard angle
         config["# of orbit"] = 10
-        config["# of satellites"] = 5 # Few sats per orbit (50 total) - Max sparsity
-        config["satellite link loss (\"X\"% )"] = 1 # Low loss to isolate churn
-        config["sat-ground loss (\"X\"% )"] = 1    # Low loss to isolate churn
+        config["# of satellites"] = 5 # Few sats per orbit (50 total) - Max sparsity = less churn
+        config["satellite link loss (\"X\"% )"] = 1
+        config["sat-ground loss (\"X\"% )"] = 1    
         config["satellite link bandwidth (\"X\" Gbps)"] = 1 # High BW
         config["sat-ground bandwidth (\"X\" Gbps)"] = 1    # High BW
 
@@ -210,7 +210,6 @@ def run_experiment(args, total_duration):
         [50.05, -5.18],    # Goonhilly Downs, UK (Starlink/Multi-Operator Gateway)
         [40.41, -3.70],    # Madrid, Spain (Reported Starlink Gateway Area)
         [38.33, 23.56],    # Tanagra, Greece (OneWeb Gateway)
-        [78.22, 15.65],    # Svalbard, Norway (OneWeb/KSAT Gateway)
         [50.110924, 8.682127], # Frankfurt, Germany (Starlink Gateway)
         [46.635700, 14.311817], # Austria (Starlink Gateway)
 
