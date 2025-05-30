@@ -446,7 +446,8 @@ class Observer():
                 prediction, other_tokens = model(sat_features)
                 prediction = prediction.argmax(dim=1).item()
                 other_tokens = other_tokens.reshape(125, -1)
-            torch.save(other_tokens, f"{path}/model_features.pt")
+            torch.save(other_tokens, f"{path}/model_features.pt") # logging
+            torch.save(other_tokens, f"/opt/home_dir/AlphaRTC/scripts/embeddings/embeddings.pt") # for bandwidth estimator
             queue_size = queue_sizes[prediction]
             print(f"Total number of handovers per call: {sat_features[:, 0, -1]}")
             print(f"Queue size: {queue_size}")
