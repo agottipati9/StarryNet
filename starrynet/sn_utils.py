@@ -872,8 +872,8 @@ def sn_perf(src, des, time_index, constellation_size, container_id_list,
 def sn_video_call(src, des, time_index, constellation_size, container_id_list,
                   file_path, configuration_file_path, remote_ssh):
     cmd = """
-    docker exec -d receiver_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/receiver.json && \
-    docker exec -d sender_rtc /opt/home_dir/AlphaRTC/out/Default/peerconnection_gcc /opt/home_dir/AlphaRTC/configs/sender.json
+    docker exec -d receiver_rtc /opt/home_dir/AlphaRTC/scripts/run_receiver_pyinfer.sh && \
+    docker exec -d sender_rtc /opt/home_dir/AlphaRTC/scripts/run_sender_pyinfer.sh
     """
     sn_remote_cmd(remote_ssh, cmd)
     print("Started video call")

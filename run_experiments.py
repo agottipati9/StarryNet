@@ -276,9 +276,9 @@ def run_experiment(args, total_duration):
     print("Parsing output logs...")
     # save results
     if args.use_default_queue:
-        output_dir = f'/mydata/gcc_baselines_default_queue/{args.experiment_id}'
+        output_dir = f'/mydata/offline_baselines_default_queue/{args.experiment_id}'
     else:
-        output_dir = f'/mydata/gcc_baselines/{args.experiment_id}'
+        output_dir = f'/mydata/offline_baselines/{args.experiment_id}'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     copy_satellite_files(config, output_dir, args.experiment_id)
