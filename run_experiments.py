@@ -275,7 +275,7 @@ def run_experiment(args, total_duration):
     # parse output logs
     print("Parsing output logs...")
     # save results
-    if args.use_default_queue:
+    if args.use_default_queue or not args.satellite_context:
         output_dir = f'/mydata/offline_baselines_default_queue/{args.experiment_id}'
     else:
         output_dir = f'/mydata/offline_baselines/{args.experiment_id}'
