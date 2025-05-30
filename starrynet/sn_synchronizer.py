@@ -116,8 +116,8 @@ class StarryNet():
         # Generate configuration file for routing
         self.observer.generate_conf(self.remote_ssh, self.remote_ftp)
 
-    def set_queue_size(self, model, use_default_queue=False):
-        self.observer.set_queue_size(model, use_default_queue)
+    def set_queue_size(self, model, args):
+        self.observer.set_queue_size(model, args)
 
     def create_nodes(self):
         # Initialize each machine in multiple threads.

@@ -147,6 +147,7 @@ def sn_load_file(path, GS_lat_long):
     # NOTE: these are used in run_experiments.py
     parser.add_argument('--exp', type=int, default=1)
     parser.add_argument('--use_default_queue', action='store_true', default=False)
+    parser.add_argument('--satellite_context', action='store_true', default=False)
 
     sn_args = parser.parse_args()
     return sn_args

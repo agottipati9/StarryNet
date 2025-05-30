@@ -434,8 +434,8 @@ class Observer():
         self.matrix_to_change(self.duration, self.orbit_number,
                               self.sat_number, path, self.GS_lat_long)
 
-    def set_queue_size(self, model, use_default_queue=False, queue_script='/opt/home_dir/StarryNet/adjust_alphartc_queue.py'):
-        if use_default_queue:
+    def set_queue_size(self, model, args, queue_script='/opt/home_dir/StarryNet/adjust_alphartc_queue.py'):
+        if args.use_default_queue:
             queue_size = 2000
             print(f"Using default queue size: {queue_size}")
         else:
@@ -447,7 +447,12 @@ class Observer():
                 prediction = prediction.argmax(dim=1).item()
                 other_tokens = other_tokens.reshape(125, -1)
             torch.save(other_tokens, f"{path}/model_features.pt") # logging
-            torch.save(other_tokens, f"/opt/home_dir/AlphaRTC/scripts/embeddings/embeddings.pt") # for bandwidth estimator
+            if args.satellite_context:
+                os.makedirs("/opt/home_dir/AlphaRTC/scripts/embeddings", exist_ok=True)
+                torch.save(other_tokens, f"/opt/home_dir/AlphaRTC/scripts/embeddings/embeddings.pt") # for bandwidth estimator
+            else:
+                if os.path.exists("/opt/home_dir/AlphaRTC/scripts/embeddings/embeddings.pt"):
+                    os.system("rm /opt/home_dir/AlphaRTC/scripts/embeddings/embeddings.pt")
             queue_size = queue_sizes[prediction]
             print(f"Total number of handovers per call: {sat_features[:, 0, -1]}")
             print(f"Queue size: {queue_size}")
