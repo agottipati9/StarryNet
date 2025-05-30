@@ -441,13 +441,14 @@ class Observer():
         else:
             path = self.configuration_file_path + "/" + self.file_path + "/satellite_features"
             sat_features = self.get_satellite_features(path)
-            queue_sizes = [600, 900] 
+            queue_sizes = [600, 2000] 
             with torch.no_grad():
                 prediction, other_tokens = model(sat_features)
                 prediction = prediction.argmax(dim=1).item()
                 other_tokens = other_tokens.reshape(125, -1)
             torch.save(other_tokens, f"{path}/model_features.pt")
             queue_size = queue_sizes[prediction]
+            print(f"Total number of handovers per call: {sat_features[:, 0, -1]}")
             print(f"Queue size: {queue_size}")
         os.system(f"python {queue_script} --queue_size {queue_size}")
 
@@ -489,6 +490,8 @@ class Observer():
             total_handovers_per_call, handover_next_ts = self.compute_number_handover_features(sat_features[gs_id])
             sat_features[gs_id] = torch.cat([sat_features[gs_id], handover_next_ts, total_handovers_per_call], dim=1)
         sat_features = torch.stack(list(sat_features.values()), dim=0)
+        # NOTE: lets only use sat 1 delay and handover features for now
+        sat_features = sat_features[:, :, [6, 35, 36]]
         sat_features = self.normalize_observations(sat_features)
         sat_features = sat_features.reshape(1, 125, -1)
         return sat_features
@@ -507,22 +510,27 @@ class Observer():
         handover_next_ts = total_handovers_per_call[1:] > 0
         handover_next_ts = torch.cat([torch.zeros((1, 1)), handover_next_ts], dim=0)  # shape = time steps, 1
         # total number of handovers per call (shape = calls, time steps)
-        total_handovers_per_call = total_handovers_per_call.sum(dim=0)
+        total_handovers_per_call = total_handovers_per_call.sum(dim=0) # TODO: remove this 1.0 * torch.ones((1))
         total_handovers_per_call = total_handovers_per_call.unsqueeze(1).repeat(1, n_time_steps).reshape(n_time_steps, 1)
         return total_handovers_per_call, handover_next_ts
 
     def normalize_observations(self, observations):
         # observations is (N x 125 x 35) tensor
+        # feature_columns = {
+        #     'sat_id': [0, 7, 14, 21, 28],
+        #     'distance': [1, 8, 15, 22, 29],
+        #     'longitude': [2, 9, 16, 23, 30],
+        #     'latitude': [3, 10, 17, 24, 31],
+        #     'altitude': [4, 11, 18, 25, 32],
+        #     'velocity': [5, 12, 19, 26, 33],
+        #     'delay': [6, 13, 20, 27, 34],
+        #     'handover_next_ts': [35],
+        #     'total_handovers_per_call': [36]
+        # }
         feature_columns = {
-            'sat_id': [0, 7, 14, 21, 28],
-            'distance': [1, 8, 15, 22, 29],
-            'longitude': [2, 9, 16, 23, 30],
-            'latitude': [3, 10, 17, 24, 31],
-            'altitude': [4, 11, 18, 25, 32],
-            'velocity': [5, 12, 19, 26, 33],
-            'delay': [6, 13, 20, 27, 34],
-            'handover_next_ts': [35],
-            'total_handovers_per_call': [36]
+            'delay': [0],
+            'handover_next_ts': [1],
+            'total_handovers_per_call': [2]
         }
         for feature_name, columns in feature_columns.items():
             # normalize each column

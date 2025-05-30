@@ -287,7 +287,7 @@ def run_experiment(args, total_duration):
 
 def load_queue_model():
     model = ViT(num_states = 125,
-        state_dim = 37,
+        state_dim = 3,
         emb_size = 64,
         depth = 6,
         n_classes = 2,
