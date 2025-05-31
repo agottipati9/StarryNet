@@ -210,6 +210,7 @@ def run_experiment(args, total_duration):
         [50.05, -5.18],    # Goonhilly Downs, UK (Starlink/Multi-Operator Gateway)
         [40.41, -3.70],    # Madrid, Spain (Reported Starlink Gateway Area)
         [38.33, 23.56],    # Tanagra, Greece (OneWeb Gateway)
+        [78.22, 15.65],    # Svalbard, Norway (OneWeb/KSAT Gateway)
         [50.110924, 8.682127], # Frankfurt, Germany (Starlink Gateway)
         [46.635700, 14.311817], # Austria (Starlink Gateway)
 
